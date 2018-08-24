@@ -1,13 +1,16 @@
 from _scoring_functions import ace_degenerate_scoring
+from transform_state import get_idx
+import numpy as np
  
 def draw_new_card(player_board, discard_board, deck, draw, top_discards):
 
     if (draw == 0):
         new_card = draw_deck_card(player_board, deck)
+        new_top_discard = None
     else:
-        new_card = draw_discarded_card(player_board, discard_board, draw, top_discards)
+        (new_card, new_top_discard) = draw_discarded_card(player_board, discard_board, draw, top_discards)
 
-    return new_card
+    return (new_card, new_top_discard)
 
 
 def draw_deck_card(player_board, deck):
@@ -35,14 +38,16 @@ def draw_discarded_card(player_board, discard_board, draw_int, top_discards):
 
     if (len(discarded_cards) == 1):
         top_discards[draw_int-1] = -1
+        new_top_discard = None
     else:
-        top_discards[draw_int-1] = discarded_cards[-2]
+        new_top_discard = discarded_cards[-2]
+        top_discards[draw_int-1] = new_top_discard
 
     successful_draw = discard_board.remove_from_board(desired_card)
 
     player_board.add_card(desired_card)
 
-    return desired_card
+    return (desired_card, new_top_discard)
 
 
 def discard_hand_card(player_board, discard_board, card):
@@ -56,55 +61,152 @@ def update_state_discard(state, discard_card, top_discard, player, p1_obs, p2_ob
     suit = int(discard_card / 13)
     top_discarded_card = top_discard[suit]
 
-    # Check if player 1 has the current top discarded card and update accordingly
-    if state[top_discarded_card] == 7:
+    # Check if there is currently a top discarded card
+    if (top_discarded_card != -1):
 
-        state[top_discarded_card] = 6
+        # Check if player 1 has the current top discarded card and update accordingly
+        if (state[get_idx(top_discarded_card, 7)] == 1):
 
-        p1_obs[top_discarded_card] = 6
-        p2_obs[top_discarded_card] = 6
+            new_discarded_card_state = 6
 
-    else:
+        elif (state[get_idx(top_discarded_card, 9)] == 1): 
 
-        state[top_discarded_card] = 8
+            new_discarded_card_state = 8
 
-        p1_obs[top_discarded_card] = 8
-        p2_obs[top_discarded_card] = 8
+        else:
+
+            print 'Error'
+            for state_opt in range(11):
+                print state[get_idx(top_discarded_card, state_opt)]
+
+        new_idx = get_idx(top_discarded_card, new_discarded_card_state)
+
+        zero_card(state, top_discarded_card)
+        zero_card(p1_obs, top_discarded_card)
+        zero_card(p2_obs, top_discarded_card)
+
+        state[new_idx] = 1
+        p1_obs[new_idx] = 1
+        p2_obs[new_idx] = 1
 
     # Change the discarded card to the top of its respective suit
     if (player == 1):
 
-        state[discard_card] = 7
-
-        p1_obs[discard_card] = 7
-        p2_obs[discard_card] = 7
+        new_state = 7
 
     elif (player == 2):
 
-        state[discard_card] = 9
+        new_state = 9
 
-        p1_obs[discard_card] = 9
-        p2_obs[discard_card] = 9
+    new_idx = get_idx(discard_card, new_state)
+
+    zero_card(state, discard_card) 
+    zero_card(p1_obs, discard_card) 
+    zero_card(p2_obs, discard_card) 
+
+    state[new_idx] = 1
+    p1_obs[new_idx] = 1
+    p2_obs[new_idx] = 1
 
     # Update the list of top discarded cards
     top_discard[suit] = discard_card
 
 
-def update_state_draw(state, new_card, player, p1_obs, p2_obs, draw_int):
+def update_state_deck_draw(state, new_card, player, p1_obs, p2_obs):
+
+    old_state = 10
 
     if (player == 1):
-        state[new_card] = 0
-        p1_obs[new_card] = 0
 
-        if (draw_int != 0):
-            p2_obs[new_card] = 0
+        new_state = 0
+        update_p1 = True
 
     elif (player == 2):
-        state[new_card] = 3
-        p2_obs[new_card] = 3
 
-        if (draw_int != 0):
-            p1_obs[new_card] = 3
+        new_state = 3
+        update_p1 = False
+
+    old_idx = get_idx(new_card, old_state)
+    new_idx = get_idx(new_card, new_state)
+
+    state[old_idx] = 0
+    state[new_idx] = 1
+
+    if update_p1:
+
+        p1_obs[old_idx] = 0
+        p1_obs[new_idx] = 1
+
+    else:
+
+        p2_obs[old_idx] = 0
+        p2_obs[new_idx] = 1
+
+
+def update_state_discard_draw_new_card(state, new_card, player, p1_obs, p2_obs):
+
+    zero_card(state, new_card)
+    zero_card(p1_obs, new_card)
+    zero_card(p2_obs, new_card)
+
+    if (player == 1):
+
+        new_state = 0
+
+    elif (player == 2):
+
+        new_state = 3
+
+    new_idx = get_idx(new_card, new_state)
+
+    state[new_idx] = 1
+    p1_obs[new_idx] = 1
+    p2_obs[new_idx] = 1
+
+
+def update_state_discard_draw_new_top_card(state, new_top_card, player, p1_obs, p2_obs):
+
+    if (new_top_card is None):
+        return
+
+    # Check if player 1 has the current top discarded card and update accordingly
+    if (state[get_idx(new_top_card, 6)] == 1):
+
+        new_state = 7
+
+    elif (state[get_idx(new_top_card, 8)] == 1): 
+
+        new_state = 9
+
+    new_idx = get_idx(new_top_card, new_state)
+
+    zero_card(state, new_top_card)
+    zero_card(p1_obs, new_top_card)
+    zero_card(p2_obs, new_top_card)
+
+    state[new_idx] = 1
+    p1_obs[new_idx] = 1
+    p2_obs[new_idx] = 1
+
+
+def update_state_draw(state, new_card, new_top_card, player, p1_obs, p2_obs, draw_int):
+    # Change card state from deck/discard to hand
+
+    if (draw_int == 0):
+
+        update_state_deck_draw(state, new_card, player, p1_obs, p2_obs)
+
+    else:
+
+        update_state_discard_draw_new_card(state, new_card, player, p1_obs, p2_obs)
+        update_state_discard_draw_new_top_card(state, new_top_card, player, p1_obs, p2_obs)
+
+
+def zero_card(arr, card):
+    '''Remove any state information about a given card.'''
+
+    for state_opt in range(11):
+        arr[get_idx(card, state_opt)] = 0
 
 
 def update_state_play(state, play_card, flex_options, player, player_board, p1_obs, p2_obs):
@@ -121,7 +223,13 @@ def update_state_play(state, play_card, flex_options, player, player_board, p1_o
 
     # If the suit was previously initialized, the flex options cannot change
     if (flex_options[suit] == -1):
-        return
+
+        # Designate card as flex option in state
+        if (player == 1):
+            new_state = 1
+
+        elif (player == 2):
+            new_state = 4
 
     played_cards = player_board.query_played_cards(suit)
     flex_option = ace_degenerate_scoring(suit, played_cards)
@@ -138,25 +246,19 @@ def update_state_play(state, play_card, flex_options, player, player_board, p1_o
 
             # Designate card as flex option in state
             if (player == 1):
-                state[play_card] = 2
-                p1_obs[play_card] = 2
-                p2_obs[play_card] = 2
+                new_state = 2
+
             elif (player == 2):
-                state[play_card] = 5
-                p1_obs[play_card] = 5
-                p2_obs[play_card] = 5
+                new_state = 5
 
         # If there still isn't a flex option, the new card is simply on the board
         else:
 
             if (player == 1):
-                state[play_card] = 1
-                p1_obs[play_card] = 1
-                p2_obs[play_card] = 1
+                new_state = 1
+
             elif (player == 2):
-                state[play_card] = 4
-                p1_obs[play_card] = 4
-                p2_obs[play_card] = 4
+                new_state = 4
 
     # If there was previously a flex option and a new card is played, we no longer have a flex option
     elif (flex_options[suit] == 1):
@@ -169,23 +271,39 @@ def update_state_play(state, play_card, flex_options, player, player_board, p1_o
         # The new card is necessarily a standard board play as well.
         if (player == 1):
 
-            state[ace] = 1
-            state[play_card] = 1
-
-            p1_obs[ace] = 1
-            p2_obs[ace] = 1
-            p1_obs[play_card] = 1
-            p2_obs[play_card] = 1
+            old_ace_state = 2
+            new_state = 1
 
         elif (player == 2):
 
-            state[ace] = 4
-            state[play_card] = 4
+            old_ace_state = 5
+            new_state = 4
 
-            p1_obs[ace] = 4
-            p2_obs[ace] = 4
-            p1_obs[play_card] = 4
-            p2_obs[play_card] = 4
+        old_ace_idx = get_idx(ace, old_ace_state)
+        
+        state[old_ace_idx] = 0
+        p1_obs[old_ace_idx] = 0
+        p2_obs[old_ace_idx] = 0
+
+    new_idx = get_idx(play_card, new_state)
+
+    zero_card(state, play_card)
+    zero_card(p1_obs, play_card)
+    zero_card(p2_obs, play_card)
+
+    state[new_idx] = 1
+    p1_obs[new_idx] = 1
+    p2_obs[new_idx] = 1
+
+
+def check_trivial_turn(card, draw_int, top_discards):
+
+    suit = int(card / 13)
+
+    if ((draw_int-1) == suit):
+        return True
+
+    return False
 
 
 def make_move(player_board, discard_board, deck, action, state, top_discard, flex_options, player, p1_obs, p2_obs):
@@ -194,22 +312,29 @@ def make_move(player_board, discard_board, deck, action, state, top_discard, fle
     play = action[1]
     draw_int = action[2]
 
-    initial_score = player_board.tally_score()
+    #print 'initial cards in p1 hand: '
+    #for card_opt in range(52):
+    #    if (state[get_idx(card_opt, 0)] == 1):
+    #        print card_opt
+
+    #print 'initial cards in p2 hand: '
+    #for card_opt in range(52):
+    #    if (state[get_idx(card_opt, 3)] == 1):
+    #        print card_opt
 
     if play:
         player_board.play_card(card)
         update_state_play(state, card, flex_options, player, player_board, p1_obs, p2_obs)
 
     else:
+
+        trivial = check_trivial_turn(card, draw_int, top_discard)
+
+        if trivial:
+            return
+
         discard_hand_card(player_board, discard_board, card)
         update_state_discard(state, card, top_discard, player, p1_obs, p2_obs)
 
-    new_card = draw_new_card(player_board, discard_board, deck, draw_int, top_discard)
-    update_state_draw(state, new_card, player, p1_obs, p2_obs, draw_int)
-
-    final_score = player_board.tally_score()
-
-    return final_score - initial_score
-
-
-
+    (new_card, new_top_discard) = draw_new_card(player_board, discard_board, deck, draw_int, top_discard)
+    update_state_draw(state, new_card, new_top_discard, player, p1_obs, p2_obs, draw_int)

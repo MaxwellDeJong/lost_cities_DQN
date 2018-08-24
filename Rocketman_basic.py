@@ -29,9 +29,8 @@ class Brain:
 
         model = Sequential()
 
-        model.add(Dense(units=2048, activation='relu', input_dim=stateCnt))
-        #model.add(Dense(units=572, activation='relu', input_dim=stateCnt))
-        model.add(Dense(1024))
+        model.add(Dense(units=256, activation='relu', input_dim=stateCnt))
+        model.add(Dense(512))
         model.add(Dense(units=actionCnt, activation='linear'))
 
         opt = RMSprop(lr=0.00025)
@@ -57,9 +56,9 @@ class Brain:
 
     def predict_next_action(self, state, player_board, top_discards):
 
-        next_Qs = self.predictOne(state)
-        valid_actions = find_all_valid_actions(state, player_board, top_discards)
+        valid_actions = find_all_valid_actions(player_board, top_discards)
 
+        next_Qs = self.predictOne(state)
         next_Qs = next_Qs[valid_actions]
 
         idx = np.argmax(next_Qs)
@@ -99,7 +98,7 @@ GAMMA = 0.99
 
 MAX_EPSILON = 1
 MIN_EPSILON = 0.01
-LAMBDA = 0.001      # speed of decay
+LAMBDA = 0.0001      # speed of decay
 
 class Agent:
 
@@ -148,7 +147,7 @@ class Agent:
 
         else:
 
-            return agent.brain.predict_next_action(state, player_board, top_discards)
+            return self.brain.predict_next_action(s, player_board, discards)
 
 
     def observe(self, sample):  # in (s, a, r, s_) format
@@ -157,7 +156,7 @@ class Agent:
 
         # slowly decrease Epsilon based on our eperience
         self.steps += 1
-        # self.epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-LAMBDA * self.steps)
+        self.epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-LAMBDA * self.steps)
 
 
     def replay(self):    
@@ -227,8 +226,9 @@ class Environment:
             R1 += r1
             R2 += r2
 
-        print("Total p1 reward", R1)
-        print("Total p2 reward", R2)
+        print 'epsilon: ', agent1.epsilon
+        print "Total p1 reward", R1
+        print "Total p2 reward", R2
 
 
     def run_agent(self, agent, player):

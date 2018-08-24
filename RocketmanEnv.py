@@ -6,6 +6,8 @@ from gym.utils import seeding
 from _GameBoard import GameBoard
 from _GamePlay import make_move
 from transform_action import unpack_action
+from transform_state import get_idx
+
 
 class RocketmanEnv(gym.Env):
 
@@ -13,13 +15,10 @@ class RocketmanEnv(gym.Env):
 
         self.__version__ = "0.0.1"
 
-        self.p1_score = 0
-        self.p2_score = 0
-
         self.gameboard = GameBoard()
 
         self.action_space = spaces.Discrete(520)
-        self.observation_space = spaces.Box(low=0, high=51, shape=(52,), dtype=np.int8)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(572,), dtype=np.int8)
 
         self.state = self.initialize_state()
 
@@ -29,21 +28,38 @@ class RocketmanEnv(gym.Env):
         self.p1_obs = self.get_observation(1)
         self.p2_obs = self.get_observation(2)
 
+        print 'initial sums...'
+        print np.sum(self.state)
+        print np.sum(self.p1_obs)
+        print np.sum(self.p2_obs)
+
 
     def initialize_state(self):
 
-        state = np.zeros(52, dtype=np.int8)
+        state_vec = np.zeros(572, dtype=np.int8)
 
         for deck_card in self.gameboard.deck.deckofcards:
-            state[deck_card] = 10
+
+            state = 10
+
+            idx = get_idx(deck_card, state)
+            state_vec[idx] = 1
 
         for p1_hand_card in self.gameboard.p1_board.hand:
-            state[p1_hand_card] = 0
+
+            state = 0
+
+            idx = get_idx(p1_hand_card, state)
+            state_vec[idx] = 1
 
         for p2_hand_card in self.gameboard.p2_board.hand:
-            state[p2_hand_card] = 3
 
-        return state
+            state = 3
+
+            idx = get_idx(p2_hand_card, state)
+            state_vec[idx] = 1
+
+        return state_vec
 
 
     def step(self, action_int, player):
@@ -60,7 +76,7 @@ class RocketmanEnv(gym.Env):
         # Perform a move if there are cards remaining
         if (self.gameboard.cards_remaining != 0):
 
-            score_diff = make_move(player_board, self.gameboard.discard_board, self.gameboard.deck, action, self.state, self.top_discard, self.flex_options, player, self.p1_obs, self.p2_obs)
+            make_move(player_board, self.gameboard.discard_board, self.gameboard.deck, action, self.state, self.top_discard, self.flex_options, player, self.p1_obs, self.p2_obs)
 
             if (action[2] == 0):
                 self.gameboard.cards_remaining -= 1
@@ -82,13 +98,10 @@ class RocketmanEnv(gym.Env):
     def reset(self):
 
         self.gameboard = GameBoard()
-        self.initialize_state()
+        self.state = self.initialize_state()
 
         self.top_discard = -1 * np.ones(4, dtype=np.int8)
         self.flex_options = np.zeros(4, dtype=np.int8)
-
-        self.p1_score = 0
-        self.p2_score = 0
 
         self.p1_obs = self.get_observation(1)
         self.p2_obs = self.get_observation(2)
@@ -99,40 +112,21 @@ class RocketmanEnv(gym.Env):
 
         if (player == 1):
             opp_hand = self.gameboard.p2_board.hand
+            state_to_hide = 3
+
         elif (player == 2):
             opp_hand = self.gameboard.p1_board.hand
+            state_to_hide = 0
 
         obs = self.state.copy()
+        hidden_state = 10
 
         for card in opp_hand:
-            obs[opp_hand] = 10
+
+            hide_idx = get_idx(card, state_to_hide)
+            new_idx = get_idx(card, hidden_state)
+
+            obs[hide_idx] = 0
+            obs[new_idx] = 1
 
         return obs
-
-
-#    def run(self, agent1, agent2):
-#
-#        self.env.reset()
-#        R = 0 
-#
-#        while True:            
-#
-#            a = agent.act(s)
-#
-#            s_, r, done, info = self.env.step(a)
-#
-#            if done: # terminal state
-#                s_ = None
-#
-#            agent.observe( (s, a, r, s_) )
-#            agent.replay()            
-#
-#            s = s_
-#            R += r
-#
-#            if done:
-#                break
-#
-#        print("Total reward:", R)
-
-
