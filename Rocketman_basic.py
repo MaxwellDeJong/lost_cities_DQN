@@ -90,6 +90,10 @@ class Memory:   # stored as ( s, a, r, s_ )
         return random.sample(self.samples, n)
 
 
+    def isFull(self):
+        return len(self.samples) >= self.capacity
+
+
 #-------------------- AGENT ---------------------------
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 256
@@ -114,7 +118,10 @@ class Agent:
         self.epsilon = MAX_EPSILON
 
         self.player = player
-        
+
+        self.rewards_log = np.zeros(25000, dtype=np.int16)
+        self.episode = 0
+
 
     def act(self, s, player_board, discards):
 
@@ -197,9 +204,47 @@ class Agent:
         self.brain.train(x, y)
 
 
+class RandomAgent:
+    
+    memory = Memory(MEMORY_CAPACITY)
+
+    def __init__(self, actionCnt):
+        self.actionCnt = actionCnt
+
+    def act(self, s, player_board, discards):
+
+        hand = player_board.hand
+
+        rand_card = random.choice(hand)
+
+        play = random.choice([0, 1])
+
+        deck_draw = random.choice([0, 1])
+
+        if (deck_draw == 1):
+                
+            draw_action = 0
+
+        else:
+
+            rand_suit = random.choice([1, 2, 3, 4])
+
+            if (discards[rand_suit-1] == -1):
+
+                draw_action = 0
+
+            else:
+
+                draw_action = rand_suit
+
+        return pack_action(rand_card, play, draw_action)
 
 
-#        self.brain.train(s, a, r, s_)
+    def observe(self, sample):  # in (s, a, r, s_) format
+        self.memory.add(sample)
+
+    def replay(self):
+        pass
 
 
 #-------------------- ENVIRONMENT ---------------------
@@ -210,7 +255,7 @@ class Environment:
         self.env = RocketmanEnv()
 
 
-    def run(self, agent1, agent2):
+    def run(self, agent1, agent2, logRewards=False):
 
         self.env.reset()
         done = False
@@ -226,9 +271,16 @@ class Environment:
             R1 += r1
             R2 += r2
 
-        print 'epsilon: ', agent1.epsilon
-        print "Total p1 reward", R1
-        print "Total p2 reward", R2
+        if logRewards:
+
+            agent1.rewards_log[agent1.episode] = R1
+            agent2.rewards_log[agent2.episode] = R2
+
+            if ((agent1.episode % 200) == 0):
+                print 'Episode: ', agent1.episode
+
+            agent1.episode += 1
+            agent2.episode += 1
 
 
     def run_agent(self, agent, player):
@@ -271,10 +323,27 @@ print 'Action count: ', actionCnt
 agent1 = Agent(stateCnt, actionCnt, 1)
 agent2 = Agent(stateCnt, actionCnt, 2)
 
+randomAgent1 = RandomAgent(actionCnt)
+randomAgent2 = RandomAgent(actionCnt)
+
 try:
+
+    while randomAgent1.memory.isFull() == False:
+        env.run(randomAgent1, randomAgent2)
+
+    agent1.memory = randomAgent2.memory
+    agent2.memory = randomAgent1.memory
+
+    randomAgent1 = None
+    randomAgent2 = None
+
     while True:
-        env.run(agent1, agent2)
+        env.run(agent1, agent2, logRewards=True)
+
 finally:
-    pass
+
     agent1.brain.model.save("Rocketman-basic-1.h5")
     agent2.brain.model.save("Rocketman-basic-2.h5")
+
+    np.save('Rocketman-log-1', agent1.rewards_log)
+    np.save('Rocketman-log-2', agent1.rewards_log)
