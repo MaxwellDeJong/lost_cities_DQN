@@ -94,6 +94,7 @@ class Memory:   # stored as ( s, a, r, s_ )
         return len(self.samples) >= self.capacity
 
 
+
 #-------------------- AGENT ---------------------------
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 256
@@ -206,10 +207,15 @@ class Agent:
 
 class RandomAgent:
     
-    memory = Memory(MEMORY_CAPACITY)
+    def __init__(self, player, load_samples):
 
-    def __init__(self, actionCnt):
-        self.actionCnt = actionCnt
+        self.player = player
+
+        self.memory = Memory(MEMORY_CAPACITY)
+
+        if load_samples:
+            self.load()
+
 
     def act(self, s, player_board, discards):
 
@@ -243,8 +249,60 @@ class RandomAgent:
     def observe(self, sample):  # in (s, a, r, s_) format
         self.memory.add(sample)
 
+
     def replay(self):
         pass
+
+
+    def save(self):
+
+        state_arr = np.zeros((572, MEMORY_CAPACITY))
+        action_arr = np.zeros(MEMORY_CAPACITY)
+        reward_arr = np.zeros(MEMORY_CAPACITY)
+        new_state_arr = np.zeros((572, MEMORY_CAPACITY))
+
+        for i in range(MEMORY_CAPACITY):
+            (s, a, r, s_) = self.memory.samples[i]
+
+            state_arr[:, i] = s
+            action_arr[i] = a
+            reward_arr[i] = r
+            new_state_arr[:, i] = s_
+
+        state_filename = 'random_history_state_' + str(self.player)
+        action_filename = 'random_history_action_' + str(self.player)
+        reward_filename = 'random_history_reward_' + str(self.player)
+        new_state_filename = 'random_history_new_state_' + str(self.player)
+
+        np.save(state_filename, state_arr)
+        np.save(action_filename, action_arr)
+        np.save(reward_filename, reward_arr)
+        np.save(new_state_filename, new_state_arr)
+
+
+    def load(self):
+
+        state_filename = 'random_history_state_' + str(self.player) + '.npy'
+        action_filename = 'random_history_action_' + str(self.player) + '.npy'
+        reward_filename = 'random_history_reward_' + str(self.player) + '.npy'
+        new_state_filename = 'random_history_new_state_' + str(self.player) + '.npy'
+
+        state_arr = np.load(state_filename)
+        action_arr = np.load(action_filename)
+        reward_arr = np.load(reward_filename)
+        new_state_arr = np.load(new_state_filename)
+
+        for i in range(MEMORY_CAPACITY):
+
+            state = state_arr[i]
+            action = action_arr[i]
+            reward = reward_arr[i]
+            new_state = new_state_arr[i]
+
+            obs = (state, action, reward, new_state)
+
+            self.observe(obs)
+
 
 
 #-------------------- ENVIRONMENT ---------------------
@@ -323,22 +381,38 @@ print 'Action count: ', actionCnt
 agent1 = Agent(stateCnt, actionCnt, 1)
 agent2 = Agent(stateCnt, actionCnt, 2)
 
-randomAgent1 = RandomAgent(actionCnt)
-randomAgent2 = RandomAgent(actionCnt)
+load_random_samples = False
+
+randomAgent1 = RandomAgent(1, load_random_samples)
+randomAgent2 = RandomAgent(2, load_random_samples)
+
+x = 0
 
 try:
 
     while randomAgent1.memory.isFull() == False:
+
+        if (x % 10 == 0):
+            print x
+        x += 1
+
         env.run(randomAgent1, randomAgent2)
 
-    agent1.memory = randomAgent2.memory
-    agent2.memory = randomAgent1.memory
+    if not load_random_samples:
 
-    randomAgent1 = None
-    randomAgent2 = None
+        randomAgent1.save()
+        randomAgent2.save()
 
-    while True:
-        env.run(agent1, agent2, logRewards=True)
+        print 'Random samples saved.'
+
+#    agent1.memory = randomAgent1.memory
+#    agent2.memory = randomAgent2.memory
+#
+#    randomAgent1 = None
+#    randomAgent2 = None
+#
+#    while True:
+#        env.run(agent1, agent2, logRewards=True)
 
 finally:
 

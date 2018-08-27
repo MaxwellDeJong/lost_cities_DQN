@@ -53,7 +53,6 @@ def get_state_information(gameboard, player):
     spades = get_face_vals(player_board.played_spades)
 
     played_suits = [clubs, diamonds, hearts, spades]
-    print 'played suits: ', played_suits
 
     for suit in num_mult:
 
