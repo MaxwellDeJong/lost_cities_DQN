@@ -7,6 +7,7 @@ from _GameBoard import GameBoard
 from _GamePlay import make_move
 from transform_action import unpack_action
 from transform_state import get_idx
+from calculate_reward_function import calc_max_reward
 
 
 class RocketmanEnv(gym.Env):
@@ -84,7 +85,8 @@ class RocketmanEnv(gym.Env):
             if (self.gameboard.cards_remaining == 0):
                 reward = self.gameboard.report_score(player)
             else:
-                reward = 0
+
+                reward = calc_max_reward(self.gameboard, player)
 
         # If there aren't cards remaining, calculate the other players score
         else:

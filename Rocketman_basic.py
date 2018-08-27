@@ -346,4 +346,4 @@ finally:
     agent2.brain.model.save("Rocketman-basic-2.h5")
 
     np.save('Rocketman-log-1', agent1.rewards_log)
-    np.save('Rocketman-log-2', agent1.rewards_log)
+    np.save('Rocketman-log-2', agent2.rewards_log)
