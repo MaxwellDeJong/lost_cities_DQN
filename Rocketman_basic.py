@@ -31,15 +31,17 @@ def huber_loss(y_true, y_pred):
 
 
 class Brain:
-    def __init__(self, stateCnt, actionCnt, player):
+    def __init__(self, stateCnt, actionCnt):
         self.stateCnt = stateCnt
         self.actionCnt = actionCnt
 
         self.model = self._createModel()
+        self.model_ = self._createModel()
 
-        print self.model.summary()
+        # print self.model.summary()
 
-        #self.model.load_weights('Rocketman-basic-' + str(player) + '.h5')
+        self.model.load_weights('Rocketman-network.h5')
+        self.model_.load_weights('Rocketman-t_network.h5')
 
 
     def _createModel(self):
@@ -61,26 +63,35 @@ class Brain:
         self.model.fit(x, y, batch_size=256, epochs=epoch, verbose=verbose)
 
 
-    def predict(self, s):
+    def predict(self, s, target=False):
+
+        if target:
+            return self.model_.predict(s)
+        else:
+            return self.model.predict(s)
 
         return self.model.predict(s)
 
 
-    def predictOne(self, s):
+    def predictOne(self, s, target=False):
 
-        return self.predict(s.reshape(1, self.stateCnt)).flatten()
+        return self.predict(s.reshape(1, self.stateCnt), target).flatten()
 
 
-    def predict_next_action(self, state, player_board, top_discards):
+    def predict_next_action(self, state, player_board, top_discards, target=False):
 
         valid_actions = find_all_valid_actions(player_board, top_discards)
 
-        next_Qs = self.predictOne(state)
+        next_Qs = self.predictOne(state, target)
         next_Qs = next_Qs[valid_actions]
 
         idx = np.argmax(next_Qs)
 
         return valid_actions[idx]
+
+
+    def updateTargetModel(self):
+        self.model_.set_weights(self.model.get_weights())
 
 
 #-------------------- MEMORY --------------------------
@@ -122,23 +133,24 @@ MAX_EPSILON = 1
 MIN_EPSILON = 0.01
 LAMBDA = 0.0001      # speed of decay
 
+UPDATE_TARGET_FREQUENCY = 2000
+
 class Agent:
 
-    def __init__(self, stateCnt, actionCnt, player):
+    def __init__(self, stateCnt, actionCnt):
 
         self.stateCnt = stateCnt
         self.actionCnt = actionCnt
 
-        self.brain = Brain(stateCnt, actionCnt, player)
+        self.brain = Brain(stateCnt, actionCnt)
         self.memory = Memory(MEMORY_CAPACITY)
 
         self.steps = 0
         self.epsilon = MAX_EPSILON
 
-        self.player = player
-
         self.rewards_log = np.zeros(25000, dtype=np.int16)
         self.scores_log = np.zeros(25000, dtype=np.int16)
+
         self.episode = 0
 
 
@@ -180,6 +192,9 @@ class Agent:
 
         self.memory.add(sample)        
 
+        if (self.steps % UPDATE_TARGET_FREQUENCY == 0):
+            self.brain.updateTargetModel()
+
         # slowly decrease Epsilon based on our eperience
         self.steps += 1
         self.epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-LAMBDA * self.steps)
@@ -196,7 +211,7 @@ class Agent:
         states_ = np.array([ (no_state if o[3] is None else o[3]) for o in batch ])
 
         p = self.brain.predict(states)
-        p_ = self.brain.predict(states_)
+        p_ = self.brain.predict(states_, True)
 
         x = np.zeros((batchLen, self.stateCnt))
         y = np.zeros((batchLen, self.actionCnt))
@@ -225,9 +240,7 @@ class Agent:
 
 class RandomAgent:
     
-    def __init__(self, player, load_samples):
-
-        self.player = player
+    def __init__(self, load_samples):
 
         self.memory = Memory(MEMORY_CAPACITY)
 
@@ -287,10 +300,10 @@ class RandomAgent:
             reward_arr[i] = r
             new_state_arr[:, i] = s_
 
-        state_filename = 'random_history_state_' + str(self.player)
-        action_filename = 'random_history_action_' + str(self.player)
-        reward_filename = 'random_history_reward_' + str(self.player)
-        new_state_filename = 'random_history_new_state_' + str(self.player)
+        state_filename = 'random_history_state'
+        action_filename = 'random_history_action'
+        reward_filename = 'random_history_reward'
+        new_state_filename = 'random_history_new_state'
 
         np.save(state_filename, state_arr)
         np.save(action_filename, action_arr)
@@ -300,10 +313,10 @@ class RandomAgent:
 
     def load(self):
 
-        state_filename = 'random_history_state_' + str(self.player) + '.npy'
-        action_filename = 'random_history_action_' + str(self.player) + '.npy'
-        reward_filename = 'random_history_reward_' + str(self.player) + '.npy'
-        new_state_filename = 'random_history_new_state_' + str(self.player) + '.npy'
+        state_filename = 'random_history_state.npy'
+        action_filename = 'random_history_action.npy'
+        reward_filename = 'random_history_reward.npy'
+        new_state_filename = 'random_history_new_state.npy'
 
         state_arr = np.load(state_filename)
         action_arr = np.load(action_filename)
@@ -326,7 +339,6 @@ class RandomAgent:
             self.observe(obs)
 
 
-
 #-------------------- ENVIRONMENT ---------------------
 class Environment:
 
@@ -335,63 +347,75 @@ class Environment:
         self.env = RocketmanEnv()
 
 
-    def run(self, agent1, agent2, logRewards=False):
+    def run(self, agent, logRewards=False):
 
         self.env.reset()
         done = False
 
-        R1 = 0 
-        R2 = 0 
+        R = 0 
 
         while not done:            
 
-            (r1, done) = self.run_agent(agent1, 1)
-            (r2, done) = self.run_agent(agent2, 2)
+            (r, done) = self.run_agent(agent)
 
-            R1 += r1
-            R2 += r2
+            R += r
 
         if logRewards:
 
-            agent1.rewards_log[agent1.episode] = R1
-            agent2.rewards_log[agent2.episode] = R2
+            agent.rewards_log[agent.episode] = R
 
-            agent1.scores_log[agent1.episode] = self.env.gameboard.report_score(1)
-            agent2.scores_log[agent2.episode] = self.env.gameboard.report_score(2)
+            cum_score = self.env.gameboard.report_score(1) + self.env.gameboard.report_score(2)
+            agent.scores_log[agent.episode] = cum_score
 
-            if ((agent1.episode % 200) == 0):
-                print 'Episode: ', agent1.episode
+            if ((agent.episode % 200) == 0):
+                print 'Episode: ', agent.episode
 
-            agent1.episode += 1
-            agent2.episode += 1
+            agent.episode += 1
 
 
-    def run_agent(self, agent, player):
+    def run_agent(self, agent):
 
-        if (player == 1):
-            state = self.env.p1_obs
-            player_board = self.env.gameboard.p1_board
-        elif (player == 2):
-            state = self.env.p2_obs
-            player_board = self.env.gameboard.p2_board
+        rewards = [0, 0]
+        done_list = [False, False]
 
-        discards = self.env.top_discard
+        for i in range(2):
 
-        s = state.copy()
+            player = i + 1
 
-        a = agent.act(state, player_board, discards)
+            if (player == 1):
+                state = self.env.p1_obs
+                player_board = self.env.gameboard.p1_board
 
-        (r, done) = self.env.step(a, player)
+            elif (player == 2):
+                state = self.env.p2_obs
+                player_board = self.env.gameboard.p2_board
 
-        if done: # terminal state
-            s_ = None
-        else:
-            s_ = state.copy()
+                if (done_list[0]):
+                    break
 
-        agent.observe((s, a, r, s_))
-        agent.replay()            
+            discards = self.env.top_discard
 
-        return (r, done)
+            s = state.copy()
+
+            a = agent.act(state, player_board, discards)
+
+            (r, done) = self.env.step(a, player)
+
+            if done: # terminal state
+                s_ = None
+            else:
+                s_ = state.copy()
+
+            agent.observe((s, a, r, s_))
+            agent.replay()            
+
+            rewards[i] = r
+            done_list[i] = done
+
+        R = rewards[0] + rewards[1]
+        Done = done_list[0] or done_list[1]
+
+        return (R, Done)
 
 
 #-------------------- MAIN ----------------------------
@@ -403,49 +427,41 @@ actionCnt = env.env.action_space.n
 print 'State count: ', stateCnt
 print 'Action count: ', actionCnt
 
-agent1 = Agent(stateCnt, actionCnt, 1)
-agent2 = Agent(stateCnt, actionCnt, 2)
+agent = Agent(stateCnt, actionCnt)
 
-load_random_samples = False
+load_random_samples = True
 
-randomAgent1 = RandomAgent(1, load_random_samples)
-randomAgent2 = RandomAgent(2, load_random_samples)
+randomAgent = RandomAgent(load_random_samples)
 
-x = 0
+n_games_completed = 0
 
 try:
 
-    while randomAgent1.memory.isFull() == False:
+    while randomAgent.memory.isFull() == False:
 
-        if (x % 10 == 0):
-            print x, ' random games completed'
-        x += 1
+        if (n_games_completed % 10 == 0):
+            print n_games_completed, ' random games completed'
+        n_games_completed += 1
 
-        env.run(randomAgent1, randomAgent2)
+        env.run(randomAgent)
 
     if not load_random_samples:
 
-        randomAgent1.save()
-        randomAgent2.save()
+        randomAgent.save()
 
         print 'Random samples saved.'
 
-    agent1.memory = randomAgent1.memory
-    agent2.memory = randomAgent2.memory
+    agent.memory = randomAgent.memory
 
-    randomAgent1 = None
-    randomAgent2 = None
+    randomAgent = None
 
     while True:
-        env.run(agent1, agent2, logRewards=True)
+        env.run(agent, logRewards=True)
 
 finally:
 
-    agent1.brain.model.save("Rocketman-basic-1.h5")
-    agent2.brain.model.save("Rocketman-basic-2.h5")
+    agent.brain.model.save("Rocketman-network.h5")
+    agent.brain.model_.save("Rocketman-t_network.h5")
 
-    np.save('Rocketman-log-1', agent1.rewards_log)
-    np.save('Rocketman-log-2', agent2.rewards_log)
-
-    np.save('Rocketman-scores-1', agent1.scores_log)
-    np.save('Rocketman-scores-2', agent2.scores_log)
+    np.save('Rocketman-rewards', agent.rewards_log)
+    np.save('Rocketman-scores', agent.scores_log)
