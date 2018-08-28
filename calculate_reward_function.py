@@ -195,4 +195,6 @@ def calc_max_reward(gameboard, player):
 
                     max_score = max(max_score, tot_score)
 
-    return max_score
+    curr_score = gameboard.report_score(player)
+
+    return max_score + curr_score

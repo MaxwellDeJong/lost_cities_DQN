@@ -22,7 +22,7 @@ class Brain:
 
         print self.model.summary()
 
-        self.model.load_weights('Rocketman-basic-' + str(player) + '.h5')
+        #self.model.load_weights('Rocketman-basic-' + str(player) + '.h5')
 
 
     def _createModel(self):
@@ -121,6 +121,7 @@ class Agent:
         self.player = player
 
         self.rewards_log = np.zeros(25000, dtype=np.int16)
+        self.scores_log = np.zeros(25000, dtype=np.int16)
         self.episode = 0
 
 
@@ -292,12 +293,16 @@ class RandomAgent:
         reward_arr = np.load(reward_filename)
         new_state_arr = np.load(new_state_filename)
 
+        state_arr = state_arr.astype(np.int8)
+        action_arr = action_arr.astype(np.int8)
+        new_state_arr = new_state_arr.astype(np.int8)
+
         for i in range(MEMORY_CAPACITY):
 
-            state = state_arr[i]
+            state = state_arr[:, i]
             action = action_arr[i]
             reward = reward_arr[i]
-            new_state = new_state_arr[i]
+            new_state = new_state_arr[:, i]
 
             obs = (state, action, reward, new_state)
 
@@ -333,6 +338,9 @@ class Environment:
 
             agent1.rewards_log[agent1.episode] = R1
             agent2.rewards_log[agent2.episode] = R2
+
+            agent1.scores_log[agent1.episode] = self.env.gameboard.report_score(1)
+            agent2.scores_log[agent2.episode] = self.env.gameboard.report_score(2)
 
             if ((agent1.episode % 200) == 0):
                 print 'Episode: ', agent1.episode
@@ -393,7 +401,7 @@ try:
     while randomAgent1.memory.isFull() == False:
 
         if (x % 10 == 0):
-            print x
+            print x, ' random games completed'
         x += 1
 
         env.run(randomAgent1, randomAgent2)
@@ -405,14 +413,14 @@ try:
 
         print 'Random samples saved.'
 
-#    agent1.memory = randomAgent1.memory
-#    agent2.memory = randomAgent2.memory
-#
-#    randomAgent1 = None
-#    randomAgent2 = None
-#
-#    while True:
-#        env.run(agent1, agent2, logRewards=True)
+    agent1.memory = randomAgent1.memory
+    agent2.memory = randomAgent2.memory
+
+    randomAgent1 = None
+    randomAgent2 = None
+
+    while True:
+        env.run(agent1, agent2, logRewards=True)
 
 finally:
 
@@ -421,3 +429,6 @@ finally:
 
     np.save('Rocketman-log-1', agent1.rewards_log)
     np.save('Rocketman-log-2', agent2.rewards_log)
+
+    np.save('Rocketman-scores-1', agent1.rewards_log)
+    np.save('Rocketman-scores-2', agent2.rewards_log)
