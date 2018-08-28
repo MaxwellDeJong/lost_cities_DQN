@@ -211,7 +211,9 @@ class Agent:
         states_ = np.array([ (no_state if o[3] is None else o[3]) for o in batch ])
 
         p = self.brain.predict(states)
-        p_ = self.brain.predict(states_, True)
+
+        p_ = self.brain.predict(states_)
+        p_target = self.brain.predict(states_, True)
 
         x = np.zeros((batchLen, self.stateCnt))
         y = np.zeros((batchLen, self.actionCnt))
@@ -230,7 +232,7 @@ class Agent:
             if s_ is None:
                 target[a] = r
             else:
-                target[a] = r + GAMMA * np.amax(p_[i])
+                target[a] = r + GAMMA * p_target[i][np.argmax(p_[i])]
 
             x[i] = s
             y[i] = target
