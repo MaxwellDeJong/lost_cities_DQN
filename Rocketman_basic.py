@@ -1,7 +1,3 @@
-#--- enable this to run on GPU
-# import os    
-# os.environ['THEANO_FLAGS'] = "device=gpu,floatX=float32"  
-
 import random
 import numpy as np
 from RocketmanEnv import RocketmanEnv
@@ -12,6 +8,27 @@ from transform_action import pack_action
 from keras.models import Sequential
 from keras.layers import *
 from keras.optimizers import *
+
+from keras import backend as K
+
+import tensorflow as tf
+
+#----------
+HUBER_LOSS_DELTA = 1.0
+LEARNING_RATE = 0.00025
+
+#----------
+def huber_loss(y_true, y_pred):
+    err = y_true - y_pred
+
+    cond = K.abs(err) < HUBER_LOSS_DELTA
+    L2 = 0.5 * K.square(err)
+    L1 = HUBER_LOSS_DELTA * (K.abs(err) - 0.5 * HUBER_LOSS_DELTA)
+
+    loss = tf.where(cond, L2, L1)   # Keras does not cover where function in tensorflow :-(
+
+    return K.mean(loss)
+
 
 class Brain:
     def __init__(self, stateCnt, actionCnt, player):
@@ -33,8 +50,8 @@ class Brain:
         model.add(Dense(512))
         model.add(Dense(units=actionCnt, activation='linear'))
 
-        opt = RMSprop(lr=0.00025)
-        model.compile(loss='mse', optimizer=opt)
+        opt = RMSprop(lr=LEARNING_RATE)
+        model.compile(loss=huber_loss, optimizer=opt)
 
         return model
 
@@ -430,5 +447,5 @@ finally:
     np.save('Rocketman-log-1', agent1.rewards_log)
     np.save('Rocketman-log-2', agent2.rewards_log)
 
-    np.save('Rocketman-scores-1', agent1.rewards_log)
-    np.save('Rocketman-scores-2', agent2.rewards_log)
+    np.save('Rocketman-scores-1', agent1.scores_log)
+    np.save('Rocketman-scores-2', agent2.scores_log)
