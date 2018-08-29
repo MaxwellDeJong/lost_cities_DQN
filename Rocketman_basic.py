@@ -15,6 +15,7 @@ from keras import backend as K
 import tensorflow as tf
 
 
+
 def huber_loss(y_true, y_pred):
 
     HUBER_LOSS_DELTA = 1.0
@@ -236,8 +237,6 @@ class Agent:
     def getTargets(self, batch):
 
         batchLen = len(batch)
-        print 'Batch length: ', batchLen
-        print 'Batch', batch
 
         no_state = np.zeros(self.stateCnt)
 
@@ -285,7 +284,8 @@ class RandomAgent:
         self.exp = 0
 
         if load_samples:
-            self.load()
+            self.memory.tree.load()
+            self.exp = MEMORY_CAPACITY
 
 
     def act(self, s, player_board, discards):
@@ -332,13 +332,7 @@ class RandomAgent:
 
     def save(self):
 
-        np.save('random_samples', self.memory)
-
-
-    def load(self):
-
-        self.memory = np.load('random_samples.npy')
-        self.exp = MEMORY_CAPACITY
+        self.memory.tree.save()
 
 
 class Environment:
@@ -435,36 +429,45 @@ n_rand_games = 0
 
 randomAgent = RandomAgent(load_random_samples)
 
-try:
 
-    while randomAgent.exp < MEMORY_CAPACITY:
+with tf.Session(config=tf.ConfigProto(device_count={"CPU":12},
+    inter_op_parallelism_threads=1,
+    intra_op_parallelism_threads=1,)) as sess:
 
-        if ((n_rand_games % 15) == 0):
+    try:
 
-            print randomAgent.exp, "/", MEMORY_CAPACITY, " random samples"
+        while randomAgent.exp < MEMORY_CAPACITY:
 
-        env.run(randomAgent)
+            if ((n_rand_games % 25) == 0):
 
-        n_rand_games += 1
+                print randomAgent.exp, "/", MEMORY_CAPACITY, " random samples"
 
-    if not load_random_samples:
+            env.run(randomAgent)
 
-        randomAgent.save()
+            n_rand_games += 1
 
-        print 'Random samples saved.'
+        if not load_random_samples:
 
-    agent.memory = randomAgent.memory
+            randomAgent.save()
 
-    randomAgent = None
+            print 'Random samples saved.'
 
-    print 'Beginning learning'
-    while True:
-        env.run(agent, logRewards=True)
+    finally:
 
-finally:
+        pass
 
-    agent.brain.model.save("Rocketman-network.h5")
-    agent.brain.model_.save("Rocketman-t_network.h5")
-
-    np.save('Rocketman-rewards', agent.rewards_log)
-    np.save('Rocketman-scores', agent.scores_log)
+#        agent.memory = randomAgent.memory
+#
+#        randomAgent = None
+#
+#        print 'Beginning learning'
+#        while True:
+#            env.run(agent, logRewards=True)
+#
+#    finally:
+#
+#        agent.brain.model.save("Rocketman-network.h5")
+#        agent.brain.model_.save("Rocketman-t_network.h5")
+#
+#        np.save('Rocketman-rewards', agent.rewards_log)
+#        np.save('Rocketman-scores', agent.scores_log)

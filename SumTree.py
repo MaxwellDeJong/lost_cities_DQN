@@ -67,3 +67,21 @@ class SumTree:
         dataIdx = idx - self.capacity + 1
 
         return (idx, self.tree[idx], self.data[dataIdx])
+
+
+    def save(self):
+
+        tree_file = 'random_samples-tree' 
+        data_file = 'random_samples-data' 
+
+        np.save(tree_file, self.tree)
+        np.save(data_file, self.data)
+
+
+    def load(self):
+
+        self.write = 0
+
+        self.tree = np.load('random_samples-tree.npy')
+        self.data = np.load('random_samples-data.npy')
+
