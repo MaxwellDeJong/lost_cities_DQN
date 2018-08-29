@@ -1,24 +1,24 @@
 import random
 import numpy as np
+
 from RocketmanEnv import RocketmanEnv
+from SumTree import SumTree
+
 from find_valid_actions import find_all_valid_actions
 from transform_action import pack_action
 
-#-------------------- BRAIN ---------------------------
 from keras.models import Sequential
 from keras.layers import *
 from keras.optimizers import *
 
 from keras import backend as K
-
 import tensorflow as tf
 
-#----------
-HUBER_LOSS_DELTA = 1.0
-LEARNING_RATE = 0.00025
 
-#----------
 def huber_loss(y_true, y_pred):
+
+    HUBER_LOSS_DELTA = 1.0
+
     err = y_true - y_pred
 
     cond = K.abs(err) < HUBER_LOSS_DELTA
@@ -31,6 +31,7 @@ def huber_loss(y_true, y_pred):
 
 
 class Brain:
+
     def __init__(self, stateCnt, actionCnt):
         self.stateCnt = stateCnt
         self.actionCnt = actionCnt
@@ -40,17 +41,19 @@ class Brain:
 
         # print self.model.summary()
 
-        self.model.load_weights('Rocketman-network.h5')
-        self.model_.load_weights('Rocketman-t_network.h5')
+#        self.model.load_weights('Rocketman-network.h5')
+#        self.model_.load_weights('Rocketman-t_network.h5')
 
 
     def _createModel(self):
 
         model = Sequential()
 
-        model.add(Dense(units=256, activation='relu', input_dim=stateCnt))
+        model.add(Dense(units=256, activation='relu', input_dim=self.stateCnt))
         model.add(Dense(512))
-        model.add(Dense(units=actionCnt, activation='linear'))
+        model.add(Dense(units=self.actionCnt, activation='linear'))
+
+        LEARNING_RATE = 0.00025
 
         opt = RMSprop(lr=LEARNING_RATE)
         model.compile(loss=huber_loss, optimizer=opt)
@@ -91,40 +94,56 @@ class Brain:
 
 
     def updateTargetModel(self):
+
         self.model_.set_weights(self.model.get_weights())
 
 
-#-------------------- MEMORY --------------------------
 class Memory:   # stored as ( s, a, r, s_ )
-
-    samples = []
 
     def __init__(self, capacity):
 
-        self.capacity = capacity
+        self.tree = SumTree(capacity)
+
+        self.e = 0.01
+        self.a = 0.6
 
 
-    def add(self, sample):
+    def get_priority(self, error):
 
-        self.samples.append(sample)        
+        return (error + self.e) ** self.a
 
-        if len(self.samples) > self.capacity:
-            self.samples.pop(0)
+
+    def add(self, error, sample):
+
+        p = self.get_priority(error)
+        self.tree.add(p, sample)
 
 
     def sample(self, n):
 
-        n = min(n, len(self.samples))
-        return random.sample(self.samples, n)
+        batch = []
+        segment = self.tree.total() / n
+
+        for i in range(n):
+
+            a = segment * i
+            b = segment * (i + 1)
+
+            s = random.uniform(a, b)
+
+            (idx, p, data) = self.tree.get(s)
+            batch.append((idx, data))
+
+        return batch
 
 
-    def isFull(self):
-        return len(self.samples) >= self.capacity
+    def update(self, idx, error):
+        p = self.get_priority(error)
+        self.tree.update(idx, p)
 
 
-
-#-------------------- AGENT ---------------------------
-MEMORY_CAPACITY = 100000
+#----------
+MEMORY_CAPACITY = 300000
 BATCH_SIZE = 256
 
 GAMMA = 0.99
@@ -134,6 +153,7 @@ MIN_EPSILON = 0.01
 LAMBDA = 0.0001      # speed of decay
 
 UPDATE_TARGET_FREQUENCY = 2000
+#----------
 
 class Agent:
 
@@ -190,7 +210,8 @@ class Agent:
 
     def observe(self, sample):  # in (s, a, r, s_) format
 
-        self.memory.add(sample)        
+        (x, y, errors) = self.getTargets([(0, sample)])
+        self.memory.add(errors[0], sample)        
 
         if (self.steps % UPDATE_TARGET_FREQUENCY == 0):
             self.brain.updateTargetModel()
@@ -203,24 +224,38 @@ class Agent:
     def replay(self):    
 
         batch = self.memory.sample(BATCH_SIZE)
+        (x, y, errors) = self.getTargets(batch)
+
+        for i in range(BATCH_SIZE):
+            idx = batch[i][0]
+            self.memory.update(idx, errors[i])
+
+        self.brain.train(x, y)
+
+
+    def getTargets(self, batch):
+
         batchLen = len(batch)
+        print 'Batch length: ', batchLen
+        print 'Batch', batch
 
         no_state = np.zeros(self.stateCnt)
 
-        states = np.array([ o[0] for o in batch ])
-        states_ = np.array([ (no_state if o[3] is None else o[3]) for o in batch ])
+        states = np.array([ o[1][0] for o in batch ])
+        states_ = np.array([ (no_state if o[1][3] is None else o[1][3]) for o in batch ])
 
         p = self.brain.predict(states)
-
         p_ = self.brain.predict(states_)
+
         p_target = self.brain.predict(states_, True)
 
         x = np.zeros((batchLen, self.stateCnt))
         y = np.zeros((batchLen, self.actionCnt))
+        errors = np.zeros(batchLen)
         
         for i in range(batchLen):
 
-            obs = batch[i]
+            obs = batch[i][1]
 
             s = obs[0]
             a = obs[1]
@@ -228,6 +263,7 @@ class Agent:
             s_ = obs[3]
 
             target = p[i]
+            oldVal = target[a]
 
             if s_ is None:
                 target[a] = r
@@ -236,8 +272,9 @@ class Agent:
 
             x[i] = s
             y[i] = target
+            errors[i] = abs(oldVal - target[a])
 
-        self.brain.train(x, y)
+        return (x, y, errors)
 
 
 class RandomAgent:
@@ -245,6 +282,7 @@ class RandomAgent:
     def __init__(self, load_samples):
 
         self.memory = Memory(MEMORY_CAPACITY)
+        self.exp = 0
 
         if load_samples:
             self.load()
@@ -280,68 +318,29 @@ class RandomAgent:
 
 
     def observe(self, sample):  # in (s, a, r, s_) format
-        self.memory.add(sample)
+
+        error = abs(sample[2])
+
+        self.memory.add(error, sample)
+        self.exp += 1
 
 
     def replay(self):
+
         pass
 
 
     def save(self):
 
-        state_arr = np.zeros((572, MEMORY_CAPACITY))
-        action_arr = np.zeros(MEMORY_CAPACITY)
-        reward_arr = np.zeros(MEMORY_CAPACITY)
-        new_state_arr = np.zeros((572, MEMORY_CAPACITY))
-
-        for i in range(MEMORY_CAPACITY):
-            (s, a, r, s_) = self.memory.samples[i]
-
-            state_arr[:, i] = s
-            action_arr[i] = a
-            reward_arr[i] = r
-            new_state_arr[:, i] = s_
-
-        state_filename = 'random_history_state'
-        action_filename = 'random_history_action'
-        reward_filename = 'random_history_reward'
-        new_state_filename = 'random_history_new_state'
-
-        np.save(state_filename, state_arr)
-        np.save(action_filename, action_arr)
-        np.save(reward_filename, reward_arr)
-        np.save(new_state_filename, new_state_arr)
+        np.save('random_samples', self.memory)
 
 
     def load(self):
 
-        state_filename = 'random_history_state.npy'
-        action_filename = 'random_history_action.npy'
-        reward_filename = 'random_history_reward.npy'
-        new_state_filename = 'random_history_new_state.npy'
-
-        state_arr = np.load(state_filename)
-        action_arr = np.load(action_filename)
-        reward_arr = np.load(reward_filename)
-        new_state_arr = np.load(new_state_filename)
-
-        state_arr = state_arr.astype(np.int8)
-        action_arr = action_arr.astype(np.int8)
-        new_state_arr = new_state_arr.astype(np.int8)
-
-        for i in range(MEMORY_CAPACITY):
-
-            state = state_arr[:, i]
-            action = action_arr[i]
-            reward = reward_arr[i]
-            new_state = new_state_arr[:, i]
-
-            obs = (state, action, reward, new_state)
-
-            self.observe(obs)
+        self.memory = np.load('random_samples.npy')
+        self.exp = MEMORY_CAPACITY
 
 
-#-------------------- ENVIRONMENT ---------------------
 class Environment:
 
     def __init__(self):
@@ -431,21 +430,22 @@ print 'Action count: ', actionCnt
 
 agent = Agent(stateCnt, actionCnt)
 
-load_random_samples = True
+load_random_samples = False
+n_rand_games = 0
 
 randomAgent = RandomAgent(load_random_samples)
 
-n_games_completed = 0
-
 try:
 
-    while randomAgent.memory.isFull() == False:
+    while randomAgent.exp < MEMORY_CAPACITY:
 
-        if (n_games_completed % 10 == 0):
-            print n_games_completed, ' random games completed'
-        n_games_completed += 1
+        if ((n_rand_games % 15) == 0):
+
+            print randomAgent.exp, "/", MEMORY_CAPACITY, " random samples"
 
         env.run(randomAgent)
+
+        n_rand_games += 1
 
     if not load_random_samples:
 
@@ -457,6 +457,7 @@ try:
 
     randomAgent = None
 
+    print 'Beginning learning'
     while True:
         env.run(agent, logRewards=True)
 
