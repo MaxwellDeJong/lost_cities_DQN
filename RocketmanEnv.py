@@ -29,11 +29,6 @@ class RocketmanEnv(gym.Env):
         self.p1_obs = self.get_observation(1)
         self.p2_obs = self.get_observation(2)
 
-        print 'initial sums...'
-        print np.sum(self.state)
-        print np.sum(self.p1_obs)
-        print np.sum(self.p2_obs)
-
 
     def initialize_state(self):
 

@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-R1 = np.load('Rocketman-log-1.npy')
+R1 = np.load('Rocketman-rewards.npy')
 R1 = R1[:np.count_nonzero(R1)]
 
 R1_avg = np.convolve(R1, np.ones(100) / 100, mode='valid')
@@ -14,7 +14,7 @@ plt.ylabel('Cumulative Rewards')
 
 plt.show()
 
-scores1 = np.load('Rocketman-scores-1.npy')
+scores1 = np.load('Rocketman-scores.npy')
 scores1 = scores1[:np.count_nonzero(scores1)]
 
 scores1_avg = np.convolve(scores1, np.ones(100) / 100, mode='valid')

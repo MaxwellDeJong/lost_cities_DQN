@@ -14,6 +14,11 @@ from keras.optimizers import *
 from keras import backend as K
 import tensorflow as tf
 
+config=K.tf.ConfigProto(intra_op_parallelism_threads=6, inter_op_parallelism_threads=1)
+session = K.tf.Session(config=config)
+K.set_session(session)
+
+
 
 
 def huber_loss(y_true, y_pred):
@@ -42,8 +47,8 @@ class Brain:
 
         # print self.model.summary()
 
-#        self.model.load_weights('Rocketman-network.h5')
-#        self.model_.load_weights('Rocketman-t_network.h5')
+        # self.model.load_weights('Rocketman-network.h5')
+        # self.model_.load_weights('Rocketman-t_network.h5')
 
 
     def _createModel(self):
@@ -362,8 +367,8 @@ class Environment:
             cum_score = self.env.gameboard.report_score(1) + self.env.gameboard.report_score(2)
             agent.scores_log[agent.episode] = cum_score
 
-            if ((agent.episode % 200) == 0):
-                print 'Episode: ', agent.episode
+            if ((agent.episode % 250) == 0):
+                print('Episode: ', agent.episode)
 
             agent.episode += 1
 
@@ -419,55 +424,43 @@ env = Environment()
 stateCnt  = env.env.observation_space.shape[0]
 actionCnt = env.env.action_space.n
 
-print 'State count: ', stateCnt
-print 'Action count: ', actionCnt
-
 agent = Agent(stateCnt, actionCnt)
 
-load_random_samples = False
+load_random_samples = True
 n_rand_games = 0
 
 randomAgent = RandomAgent(load_random_samples)
 
+try:
 
-with tf.Session(config=tf.ConfigProto(device_count={"CPU":12},
-    inter_op_parallelism_threads=1,
-    intra_op_parallelism_threads=1,)) as sess:
+    while randomAgent.exp < MEMORY_CAPACITY:
 
-    try:
+        if ((n_rand_games % 25) == 0):
 
-        while randomAgent.exp < MEMORY_CAPACITY:
+            print(randomAgent.exp, "/", MEMORY_CAPACITY, " random samples")
 
-            if ((n_rand_games % 25) == 0):
+        env.run(randomAgent)
 
-                print randomAgent.exp, "/", MEMORY_CAPACITY, " random samples"
+        n_rand_games += 1
 
-            env.run(randomAgent)
+    if not load_random_samples:
 
-            n_rand_games += 1
+        randomAgent.save()
 
-        if not load_random_samples:
+        print('Random samples saved.')
 
-            randomAgent.save()
+    agent.memory = randomAgent.memory
 
-            print 'Random samples saved.'
+    randomAgent = None
 
-    finally:
+    print('Beginning learning')
+    while True:
+        env.run(agent, logRewards=True)
 
-        pass
+finally:
 
-#        agent.memory = randomAgent.memory
-#
-#        randomAgent = None
-#
-#        print 'Beginning learning'
-#        while True:
-#            env.run(agent, logRewards=True)
-#
-#    finally:
-#
-#        agent.brain.model.save("Rocketman-network.h5")
-#        agent.brain.model_.save("Rocketman-t_network.h5")
-#
-#        np.save('Rocketman-rewards', agent.rewards_log)
-#        np.save('Rocketman-scores', agent.scores_log)
+    agent.brain.model.save("Rocketman-network.h5")
+    agent.brain.model_.save("Rocketman-t_network.h5")
+
+    np.save('Rocketman-rewards', agent.rewards_log)
+    np.save('Rocketman-scores', agent.scores_log)

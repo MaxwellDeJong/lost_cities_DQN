@@ -25,8 +25,8 @@ class PlayerBoard():
             return self.played_spades
 
         else:
-            print 'Invalid suit provided.'
-            print 'Suit given: ', suit
+            print('Invalid suit provided.')
+            print('Suit given: ', suit)
 
 
     def remove_card(self, card):

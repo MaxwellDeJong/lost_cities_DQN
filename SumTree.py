@@ -82,6 +82,6 @@ class SumTree:
 
         self.write = 0
 
-        self.tree = np.load('random_samples-tree.npy')
-        self.data = np.load('random_samples-data.npy')
+        self.tree = np.load('random_samples-tree.npy', encoding='latin1')
+        self.data = np.load('random_samples-data.npy', encoding='latin1')
 

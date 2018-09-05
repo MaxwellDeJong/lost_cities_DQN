@@ -75,9 +75,9 @@ def update_state_discard(state, discard_card, top_discard, player, p1_obs, p2_ob
 
         else:
 
-            print 'Error'
+            print('Error')
             for state_opt in range(11):
-                print state[get_idx(top_discarded_card, state_opt)]
+                print(state[get_idx(top_discarded_card, state_opt)])
 
         new_idx = get_idx(top_discarded_card, new_discarded_card_state)
 
