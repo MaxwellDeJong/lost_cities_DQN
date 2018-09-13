@@ -24,6 +24,3 @@ def pack_action(card_int, play, draw_int):
     offset = (2 * cards_in_deck * draw_int)
 
     return row_val + offset
-
-    return row_val * (draw_int + 1)
-

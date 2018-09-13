@@ -419,48 +419,50 @@ class Environment:
 
 
 #-------------------- MAIN ----------------------------
-env = Environment()
 
-stateCnt  = env.env.observation_space.shape[0]
-actionCnt = env.env.action_space.n
+if __name__ == "__main__":
+    env = Environment()
 
-agent = Agent(stateCnt, actionCnt)
+    stateCnt  = env.env.observation_space.shape[0]
+    actionCnt = env.env.action_space.n
 
-load_random_samples = True
-n_rand_games = 0
+    agent = Agent(stateCnt, actionCnt)
 
-randomAgent = RandomAgent(load_random_samples)
+    load_random_samples = True
+    n_rand_games = 0
 
-try:
+    randomAgent = RandomAgent(load_random_samples)
 
-    while randomAgent.exp < MEMORY_CAPACITY:
+    try:
 
-        if ((n_rand_games % 25) == 0):
+        while randomAgent.exp < MEMORY_CAPACITY:
 
-            print(randomAgent.exp, "/", MEMORY_CAPACITY, " random samples")
+            if ((n_rand_games % 25) == 0):
 
-        env.run(randomAgent)
+                print(randomAgent.exp, "/", MEMORY_CAPACITY, " random samples")
 
-        n_rand_games += 1
+            env.run(randomAgent)
 
-    if not load_random_samples:
+            n_rand_games += 1
 
-        randomAgent.save()
+        if not load_random_samples:
 
-        print('Random samples saved.')
+            randomAgent.save()
 
-    agent.memory = randomAgent.memory
+            print('Random samples saved.')
 
-    randomAgent = None
+        agent.memory = randomAgent.memory
 
-    print('Beginning learning')
-    while True:
-        env.run(agent, logRewards=True)
+        randomAgent = None
 
-finally:
+        print('Beginning learning')
+        while True:
+            env.run(agent, logRewards=True)
 
-    agent.brain.model.save("Rocketman-network.h5")
-    agent.brain.model_.save("Rocketman-t_network.h5")
+    finally:
 
-    np.save('Rocketman-rewards', agent.rewards_log)
-    np.save('Rocketman-scores', agent.scores_log)
+        agent.brain.model.save("Rocketman-network.h5")
+        agent.brain.model_.save("Rocketman-t_network.h5")
+
+        np.save('Rocketman-rewards', agent.rewards_log)
+        np.save('Rocketman-scores', agent.scores_log)

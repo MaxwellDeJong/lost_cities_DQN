@@ -5,6 +5,8 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui  import *
 from PyQt4 import QtSvg
 
+from transform_action import pack_action
+
 
 def get_initial_state():
 
@@ -86,6 +88,7 @@ class CardGraphicsItem(QtSvg.QGraphicsSvgItem):
         self.player = player # which player holds the card
         self.faceDown = faceDown # does the card faceDown
         self.anim = QPropertyAnimation(self, "pos") # will use to animate card movement
+        self.clicked = False
         
         #default properties
         self.setAcceptHoverEvents(True) #by Qt default it is set to False                 
@@ -104,7 +107,9 @@ class CardGraphicsItem(QtSvg.QGraphicsSvgItem):
     def hoverLeaveEvent(self, event):
         """ event when mouse leave a card """    
 
-        self.setGraphicsEffect(None) 
+        if not self.clicked:
+
+            self.setGraphicsEffect(None) 
     
     
 #    def __repr__(self):                
@@ -116,6 +121,8 @@ class cardTableWidget(QWidget):
 
     def __init__(self, env, parent=None):
 
+        self.env = env
+
         gameboard = env.gameboard
 
         self.p1_board = gameboard.p1_board
@@ -124,14 +131,16 @@ class cardTableWidget(QWidget):
         self.p1_hand = self.p1_board.hand[:]
         self.p2_hand = self.p2_board.hand[:]
 
+        print('p1 hand: ', self.p1_hand)
+
         p1_played = [[], [], [], []]
         p2_played = [[], [], [], []]
 
-        self.all_discarded = []
+        self.all_discarded = [[], [], [], []]
 
         self.all_played = [p1_played, p2_played]
 
-        self.deck = gameboard.env
+        self.deck = gameboard.deck.deckofcards[:]
 
         self.p1_card_to_change = None
         self.p1_card_graphics_to_change = None
@@ -140,6 +149,9 @@ class cardTableWidget(QWidget):
         self.p1_card_to_draw = None
         self.p1_card_graphics_to_draw = None
 
+        self.last_p1_card = None
+        self.p1_hand_animated = False
+        
         super(QWidget, self).__init__(parent)       
 
         self.initUI()
@@ -191,14 +203,18 @@ class cardTableWidget(QWidget):
         self.boardPos = [[(1100, p1_y, 0), (1100 + suit_spacing, p1_y, 0), (1100 + 2 * suit_spacing, p1_y, 0), (1100 + 3 * suit_spacing, p1_y, 0)], 
                 [(1100, p2_y, 0), (1100 + suit_spacing, p2_y, 0), (1100 + 2 * suit_spacing, p2_y, 0), (1100 + 3 * suit_spacing, p2_y, 0)]]
 
+        discard_rectF = QRectF(0, 40, 340, 1000)
+
         #pen = QPen("cyan")
         pen = QPen()
         #brush = QBrush("blue")
         brush = QBrush()
-        self.scene.addRect(QRectF(0,40,340,1000), pen, brush)
+        self.scene.addRect(discard_rectF, pen, brush)
 #        c = QtSvg.QGraphicsSvgItem('svg\j_b.svg')
 #        c.setPos(0,0)
 #        self.scene.addItem(c)
+
+        self.discard_rect = QRegion(0, 40, 340, 1000)
 
         self.dealHands()
         self.dealDeck()
@@ -209,88 +225,199 @@ class cardTableWidget(QWidget):
         # print(self.scene.itemAt(110,110))
 
 
-    def process_click(self, card_graphics):
+    def process_non_card_click(self, p):
 
-        card = card_graphics.card
-        suit = int(card / 13)
+        print('clicked registered, but not on card')
+        print('p1_card: ', self.p1_card_to_change)
 
-        # If there isn't yet a card to play, update the card to be played
-        if (self.p1_hand_card_to_play is None):
+        if ((self.p1_card_to_change != None)):
 
-            if (card in self.p1_hand):
-
-                self.p1_card_to_change = card
-                self.p1_card_to_change = card_graphics
-
-                self.p1_play = -1
-                self.p1_discard = -1
-                self.p1_card_to_draw = None
-                self.p1_card_graphics_to_draw = None
-
-        else:
-
-            # If we have not decided if we will play or discard yet, use
-            # this click to make the distinction
             if ((self.p1_play and self.p1_discard) == -1):
 
-                if (card in self.all_discarded[suit]):
-                    
+                to_discard = self.discard_rect.contains(p)
+                print('Point inside of discard rectangle: ', to_discard)
+
+                if (to_discard): 
                     self.p1_discard = 1
                     self.p1_play = 0
 
                 else:
 
-                    if (self.p1_board.valid_play(card)):
+                    self.p1_discard = 0
+                    self.p1_play = 1
 
-                        self.p1_discard = 0
-                        self.p1_play = 1
+            else:
+                print('Play/discard already chosen. Resetting card...')
+                self.p1_card_to_change = None
 
-                    else:
 
-                        self.p1_play = -1
-                        self.p1_discard = -1
-                        self.p1_card_to_change = None
-                        self.p1_card_graphics_to_change = None
+    def update_card_to_change(self, card_graphics):
 
-                if ((self.p1_play and self.p1_discard) != -1):
+        print('Not yet a card to play')
 
-                    # animate move
-                    card_graphics.anim.setDuration(150)
+        card = card_graphics.card
 
-                    end_pos = find_new_card_pos(card_graphics, 0, self.p1_discard)
-                    card_graphics.anim.setEndValue(end_pos)
-                    card_graphics.anim.start() 
+        if (card in self.p1_hand):
+
+            self.p1_card_to_change = card
+            self.p1_card_graphics_to_change = card_graphics
+            self.last_p1_card = card_graphics.pos()
+
+            print('Card pos: ', self.last_p1_card)
+
+        self.p1_play = -1
+        self.p1_discard = -1
+        self.p1_card_to_draw = None
+        self.p1_card_graphics_to_draw = None
+
+
+    def update_hand_card_action(self, card, suit):
+
+        if (card in self.all_discarded[suit]):
+            
+            self.p1_discard = 1
+            self.p1_play = 0
+
+        else:
+
+            if (self.p1_board.valid_play(card)):
+
+                self.p1_discard = 0
+                self.p1_play = 1
 
             else:
 
-                self.p1_card_to_draw = card
-
-                # animate move
-                card_graphics.anim.setDuration(150)
-
-                end_pos = find_new_card_pos(card_graphics, 1, 0)
-                card_graphics.anim.setEndValue(end_pos)
-                card_graphics.anim.start() 
-
-                if (card in deck):
-
-                    draw_int = 0
-
-                else:
-
-                    draw_int = suit + 1
-
-                action = (self.p1_card_to_change, self.p1_play, draw_int)
+                print('')
+                print('Invalid play requested. Resetting state...')
+                print('')
 
                 self.p1_play = -1
                 self.p1_discard = -1
                 self.p1_card_to_change = None
                 self.p1_card_graphics_to_change = None
-                self.p1_card_to_draw = None
-                self.p1_card_graphics_to_draw = None
+                self.last_p1_card = None
 
-                perform_action()
-                
+
+    def animate_hand_card(self):
+
+        if (((self.p1_play and self.p1_discard) != -1) and (self.p1_hand_animated == False)):
+
+            print('Both play and discard recorded. Attempting to animate...')
+
+            # animate move
+            self.p1_card_graphics_to_change.anim.setDuration(150)
+
+            #self.p1_card_graphics_to_change.anim.setStartValue(card_graphics.pos())
+            end_pos = self.find_new_card_pos(self.p1_card_to_change, 0, self.p1_discard, 1)
+            print('End position: ', end_pos)
+            self.p1_card_graphics_to_change.anim.setEndValue(end_pos)
+            self.p1_card_graphics_to_change.anim.start() 
+
+            print('animation completed.')
+            self.p1_hand_animated = True
+
+
+    def process_draw_click(self, card_graphics):
+
+        card = card_graphics.card
+
+        self.p1_card_to_draw = card
+        self.p1_card_graphics_to_draw = card_graphics
+
+        print('Missing position for draw card: ', self.last_p1_card)
+
+        # animate move
+        self.p1_card_graphics_to_draw.anim.setDuration(150)
+
+        self.p1_card_graphics_to_draw.anim.setStartValue(card_graphics.pos())
+        end_pos = self.find_new_card_pos(card, 1, 0, 1, self.last_p1_card)
+        print('end position for card drawn: ', end_pos)
+        self.p1_card_graphics_to_draw.anim.setEndValue(end_pos)
+        self.p1_card_graphics_to_draw.anim.start() 
+
+        print('animation completed.')
+
+        if (card in self.deck):
+
+            draw_int = 0
+
+        else:
+
+            draw_int = suit + 1
+
+        action = pack_action(self.p1_card_to_change, self.p1_play, draw_int)
+        print('Final action: ', action)
+
+        return action
+
+
+    def perform_step_from_click(self, action):
+
+        # update lists
+        print('hand: ', self.p1_hand)
+        print('card to change: ', self.p1_card_to_change)
+        self.p1_hand.remove(self.p1_card_to_change)
+        self.p1_hand.append(self.p1_card_to_draw)
+
+        to_change_suit = int(self.p1_card_to_change / 13)
+
+        if (self.p1_play == 1):
+            self.all_played[0][to_change_suit].append(self.p1_card_to_change)
+        else:
+            self.all_discarded[to_change_suit].append(self.p1_card_to_change)
+
+        self.p1_play = -1
+        self.p1_discard = -1
+        self.p1_card_to_change = None
+        self.p1_card_graphics_to_change = None
+        self.p1_card_to_draw = None
+        self.p1_card_graphics_to_draw = None
+        self.last_p1_card = None
+        self.p1_hand_animated = False
+
+        self.env.step(action, 1)
+
+
+    def process_click(self, card_graphics, card_clicked, p):
+
+        if (not card_clicked):
+
+            self.process_non_card_click(p)
+
+            self.animate_hand_card()
+
+        else:
+
+            print('card clicked')
+
+            card_graphics.clicked = True
+
+            card = card_graphics.card
+            suit = int(card / 13)
+
+            # If there isn't yet a card to play, update the card to be played
+            if (self.p1_card_to_change is None):
+                self.update_card_to_change(card_graphics)
+
+            else:
+
+                print('Card already chosen')
+                print ('Card position: ', self.last_p1_card)
+
+                # If we have not decided if we will play or discard yet, use
+                # this click to make the distinction
+                if ((self.p1_play and self.p1_discard) == -1):
+
+                    self.update_hand_card_action(card, suit)
+
+                else:
+
+                    action = self.process_draw_click(card_graphics)
+
+                    self.perform_step_from_click(action)
+
+        self.animate_hand_card()
+
     
     def mousePressEvent(self, event):
 
@@ -299,48 +426,45 @@ class cardTableWidget(QWidget):
         print(p)
         p -= QPoint(10,10) #correction to mouse click. not sure why this happen        
         itemAt = self.view.itemAt(p)       
-        print(itemAt)
+        print('itemAt: ', itemAt)
+
+        card_clicked = False
 
         if isinstance(itemAt, CardGraphicsItem):
 
             # Give the card a black outline
-            effect = QGraphicsDropShadowEffect(self)
+            effect = QGraphicsDropShadowEffect(itemAt)
             effect.setBlurRadius(15)
-            effect.setColor(Qt.black)        
+            effect.setColor(Qt.blue)        
             effect.setOffset(QPointF(-5,0))
-            self.setGraphicsEffect(effect)        
+            itemAt.setGraphicsEffect(effect)        
 
-            # Update figure out the correct action from the click
-            self.process_click(card_graphics)
+            card_clicked = True
 
-        print(p)
+        # Update figure out the correct action from the click
+        self.process_click(itemAt, card_clicked, p)
 
-        print("All items at pos: ", end="")
-        print(self.view.items(p))
+        #print("All items at pos: ", end="")
+        #print(self.view.items(p))
 
-        print("view.mapToScene: ",end="")
-        print(self.view.mapToScene(p))
+        #print("view.mapToScene: ",end="")
+        #print(self.view.mapToScene(p))
 
         
-    def find_new_card_pos(card_graphics, draw, discard, player=1):
-
-        card = card_graphics.card
+    def find_new_card_pos(self, card, draw, discard, player, missing_hand_pos=None):
 
         if (player == 1):
             hand = self.p1_hand
         else:
             hand = self.p2_hand
 
-        if (card not in hand):
-            return None
-
         if (draw == 1):
 
-            return self.find_new_card_pos_hand(player)
+            return self.find_new_card_pos_hand(player, missing_hand_pos)
 
         if (discard == 1):
 
-            return self.find_new_card_pos_discard(card, player)
+            return self.find_new_card_pos_discard(card)
 
         return self.find_new_card_pos_play(card, player)
 
@@ -374,16 +498,15 @@ class cardTableWidget(QWidget):
         return QPointF(x_f, y_f)
 
 
-    def find_new_card_pos_hand(self, player=1):
+    def find_new_card_pos_hand(self, player, missing_hand_pos):
         '''Finds position of card to be added to hand.'''
 
-        if (player == 1):
-            (x, y) = self.last_p1_card
+        return missing_hand_pos
 
-        elif (player == 2):
-            (x, y) = self.last_p2_card
-
-        return QPointF(x, y)
+#        if (player == 1):
+#            return self.last_p1_card
+#
+#        return self.last_p2_card
 
 
     def getCenterPoint(self):
@@ -548,6 +671,8 @@ class cardTableWidget(QWidget):
         ang = 90
 
         (x, y, ang) = self.deckPos
+
+        print('deck: ', self.deck)
 
         for card in self.deck:
 

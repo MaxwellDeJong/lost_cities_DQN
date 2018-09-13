@@ -4,27 +4,27 @@ import sys
 from PyQt4.QtCore import *
 from PyQt4.QtGui  import *
 import cardstable
-import random
-      
+
+from Rocketman_ddqn import Environment, Agent, RandomAgent
         
 class CardTableWidgetExtend(cardstable.cardTableWidget):
     """ extension of CardTableWidget """
-    def __init__(self):
+    def __init__(self, env):
 
-        super(CardTableWidgetExtend, self).__init__()
+        super(CardTableWidgetExtend, self).__init__(env)
 
         
 class MainWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, env, parent=None):
         super(MainWindow, self).__init__(parent)
 
         # create widgets             
-        self.label1 = QLabel("DDQN Rocketman")
+        self.label1 = QLabel("DDQN+PR Rocketman")
         self.label1.setFont(QFont('Andalus', 24))        
         self.label1.setAlignment(Qt.AlignCenter)
         self.label1.setMaximumHeight(30)        
         self.label1.setStyleSheet("QLabel { background-color : black; color : white; font: bold }")
-        self.cardsTable = CardTableWidgetExtend()
+        self.cardsTable = CardTableWidgetExtend(env)
         
         # main layout
         self.mainLayout = QVBoxLayout()
@@ -54,8 +54,21 @@ class MainWindow(QMainWindow):
 
         
 if __name__ == "__main__":
+
+    env = Environment()
+
+    stateCnt  = env.env.observation_space.shape[0]
+    actionCnt = env.env.action_space.n
+
+    agent = Agent(stateCnt, actionCnt)
+
+    load_random_samples = True
+    n_rand_games = 0
+
+    randomAgent = RandomAgent(load_random_samples)
+
     app = QApplication(sys.argv)
-    widget = MainWindow()
+    widget = MainWindow(env.env)
     widget.setWindowTitle("Rocketman")
     widget.setWindowIcon(QIcon('icon.png'))    
     widget.show()
