@@ -5,6 +5,8 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui  import *
 from PyQt4 import QtSvg
 
+from time import sleep
+
 from transform_action import pack_action
 
 
@@ -77,13 +79,12 @@ class QGraphicsViewExtend(QGraphicsView):
 class CardGraphicsItem(QtSvg.QGraphicsSvgItem):
     """ Extends Qt.QGraphicsItem for card items graphics """ 
 
-    def __init__(self, card, ind, svgFile, player, faceDown=False):
+    def __init__(self, card, svgFile, player, faceDown=False):
 
         super(CardGraphicsItem, self).__init__(svgFile)
 
         # special properties
         self.card = card        
-        self.ind = ind # index
         self.svgFile = svgFile # svg file for card graphics
         self.player = player # which player holds the card
         self.faceDown = faceDown # does the card faceDown
@@ -130,8 +131,6 @@ class cardTableWidget(QWidget):
 
         self.p1_hand = self.p1_board.hand[:]
         self.p2_hand = self.p2_board.hand[:]
-
-        print('p1 hand: ', self.p1_hand)
 
         p1_played = [[], [], [], []]
         p2_played = [[], [], [], []]
@@ -261,6 +260,7 @@ class cardTableWidget(QWidget):
 
             self.p1_card_to_change = card
             self.p1_card_graphics_to_change = card_graphics
+            #TODO
             self.last_p1_card = card_graphics.pos()
 
             print('Card pos: ', self.last_p1_card)
@@ -300,42 +300,56 @@ class cardTableWidget(QWidget):
 
     def animate_hand_card(self):
 
+        animate = False
+
         if (((self.p1_play and self.p1_discard) != -1) and (self.p1_hand_animated == False)):
 
-            print('Both play and discard recorded. Attempting to animate...')
+            if animate:
 
-            # animate move
-            self.p1_card_graphics_to_change.anim.setDuration(150)
+                if (self.p1_discard == 1):
+                    print('Discard action. Attempting to rotate...')
+                    self.p1_card_graphics_to_change = self.rotate_card(self.p1_card_graphics_to_change, 1)
 
-            #self.p1_card_graphics_to_change.anim.setStartValue(card_graphics.pos())
-            end_pos = self.find_new_card_pos(self.p1_card_to_change, 0, self.p1_discard, 1)
-            print('End position: ', end_pos)
-            self.p1_card_graphics_to_change.anim.setEndValue(end_pos)
-            self.p1_card_graphics_to_change.anim.start() 
+                    print('Last p1 card after rotation: ', self.last_p1_card)
+                    sleep(0.1)
 
-            print('animation completed.')
+                print('Both play and discard recorded. Attempting to animate...')
+
+                # animate move
+                self.p1_card_graphics_to_change.anim.setDuration(15)
+
+                end_pos = self.find_new_card_pos(self.p1_card_to_change, 0, self.p1_discard, 1)
+                print('Desired end position: ', end_pos)
+
+                print('Last p1 card before rotation: ', self.last_p1_card)
+
+                self.p1_card_graphics_to_change.anim.setEndValue(end_pos)
+                self.p1_card_graphics_to_change.anim.start() 
+
+                print('Last p1 card after animation: ', self.last_p1_card)
+                print('animation completed.')
+                print('End position: ', self.p1_card_graphics_to_change.pos())
+
+            else:
+
+                if (self.p1_discard == 1):
+                    print('Discard action. Attempting to rotate...')
+                    self.p1_card_graphics_to_change = self.rotate_card(self.p1_card_graphics_to_change, 1)
+
+                    print('Last p1 card after rotation: ', self.last_p1_card)
+
+                end_pos = self.find_new_card_pos(self.p1_card_to_change, 0, self.p1_discard, 1)
+                self.p1_card_graphics_to_change.setPos(end_pos)
+
             self.p1_hand_animated = True
+            self.p1_card_graphics_to_change.clicked = False
 
 
     def process_draw_click(self, card_graphics):
 
+        animate = False
+
         card = card_graphics.card
-
-        self.p1_card_to_draw = card
-        self.p1_card_graphics_to_draw = card_graphics
-
-        print('Missing position for draw card: ', self.last_p1_card)
-
-        # animate move
-        self.p1_card_graphics_to_draw.anim.setDuration(150)
-
-        self.p1_card_graphics_to_draw.anim.setStartValue(card_graphics.pos())
-        end_pos = self.find_new_card_pos(card, 1, 0, 1, self.last_p1_card)
-        print('end position for card drawn: ', end_pos)
-        self.p1_card_graphics_to_draw.anim.setEndValue(end_pos)
-        self.p1_card_graphics_to_draw.anim.start() 
-
-        print('animation completed.')
 
         if (card in self.deck):
 
@@ -343,7 +357,39 @@ class cardTableWidget(QWidget):
 
         else:
 
+            suit = int(card / 13)
+
             draw_int = suit + 1
+
+        self.p1_card_to_draw = card
+        self.p1_card_graphics_to_draw = card_graphics
+
+        print('Missing position for draw card: ', self.last_p1_card)
+
+        if animate:
+
+            if (draw_int == 0):
+                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1)
+
+            # animate move
+            self.p1_card_graphics_to_draw.anim.setDuration(15)
+
+            #self.p1_card_graphics_to_draw.anim.setStartValue(card_graphics.pos())
+            end_pos = self.find_new_card_pos(card, 1, 0, 1, self.last_p1_card)
+            print('end position for card drawn: ', end_pos)
+            self.p1_card_graphics_to_draw.anim.setEndValue(end_pos)
+            self.p1_card_graphics_to_draw.anim.start() 
+
+        else:
+
+            if (draw_int == 0):
+                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1)
+
+            self.p1_card_graphics_to_draw.setPos(self.last_p1_card)
+
+        self.p1_card_graphics_to_draw.clicked = False
+
+        print('animation completed.')
 
         action = pack_action(self.p1_card_to_change, self.p1_play, draw_int)
         print('Final action: ', action)
@@ -354,7 +400,6 @@ class cardTableWidget(QWidget):
     def perform_step_from_click(self, action):
 
         # update lists
-        print('hand: ', self.p1_hand)
         print('card to change: ', self.p1_card_to_change)
         self.p1_hand.remove(self.p1_card_to_change)
         self.p1_hand.append(self.p1_card_to_draw)
@@ -402,7 +447,7 @@ class cardTableWidget(QWidget):
             else:
 
                 print('Card already chosen')
-                print ('Card position: ', self.last_p1_card)
+                print('Last p1 card position: ', self.last_p1_card)
 
                 # If we have not decided if we will play or discard yet, use
                 # this click to make the distinction
@@ -423,7 +468,7 @@ class cardTableWidget(QWidget):
 
         # check if item is a CardGraphicsItem  
         p = event.pos()
-        print(p)
+        #print(p)
         p -= QPoint(10,10) #correction to mouse click. not sure why this happen        
         itemAt = self.view.itemAt(p)       
         print('itemAt: ', itemAt)
@@ -509,14 +554,6 @@ class cardTableWidget(QWidget):
 #        return self.last_p2_card
 
 
-    def getCenterPoint(self):
-        """ finds screen center point """       
-
-        rect = self.view.geometry()       
-        print(rect)
-        return QPointF(rect.width()/2,rect.height()/2)       
-
-    
     def setBackgroundColor(self, color):
         """ add background color """
         
@@ -561,7 +598,7 @@ class cardTableWidget(QWidget):
         return fn
 
             
-    def addCard(self, card, player, scale, faceDown=False):
+    def addCard(self, card, player, faceDown=False):
         """ adds CardGraphicsItem graphics to board.
         also updates the total cards list
         """        
@@ -571,30 +608,24 @@ class cardTableWidget(QWidget):
         else:
             svgFile = self.cardsvgFile(card)
 
-        # create CardGraphicsItem instance
         ind = len(self.getCardsList()) + 1
-        tmp = CardGraphicsItem(card, ind, svgFile, player, faceDown)
 
-        tmp.setScale(scale)
+        # create CardGraphicsItem instance
+        tmp = CardGraphicsItem(card, svgFile, player, faceDown)
+
+        tmp.setScale(self.scale)
         tmp.setZValue(ind) # set ZValue as index (last in is up)        
-#        self.cardsGraphItems.append(tmp)
-        self.scene.addItem(tmp)
-        # sanity check
-        
-        #print("num of cards=" + str(len(self.cardsList)))
 
+        self.scene.addItem(tmp)
+
+        return tmp
+        
 
     def removeCard(self, card):
         """ removes CardGraphicsItem graphics from board 
         also removes from the total cards list
         """
-        if isinstance(card,int):
-            allCards = self.getCardsList()
-            indices = [c.ind for c in allCards]
-            ind = indices.index(card)            
-            self.scene.removeItem(allCards[ind])            
-        if isinstance(card,CardGraphicsItem):
-            self.scene.removeItem(card)
+        self.scene.removeItem(card)
 
 
     def changeCard(self, cardIndRemove, card, faceDown=False):       
@@ -660,8 +691,59 @@ class cardTableWidget(QWidget):
                 if (player == 2):
                     faceDown = True
 
-                self.addCard(card, player, self.scale, faceDown)
+                card_graphics = self.addCard(card, player, faceDown)
                 self.getCardsList()[0].setPos(x+dx*offset, y + dy*offset)
+
+
+    def rotate_card(self, card_graphics, player):
+
+        ready = False
+
+        x = card_graphics.pos().x()
+        y = card_graphics.pos().y()
+
+        print('Initial x: ', x)
+        print('Initial y: ', y)
+
+        card = card_graphics.card
+        old_z = card_graphics.zValue()
+
+        faceDown = False
+        ang = 90
+
+        self.removeCard(card_graphics)
+        self.scene.removeItem(card_graphics)
+
+        new_card_graphics = self.addCard(card, player, faceDown)
+        new_card_graphics.setPos(x, y)
+        new_card_graphics.setZValue(old_z)
+        new_card_graphics.rotate(ang)
+        self.scene.addItem(new_card_graphics)
+
+        return new_card_graphics
+
+
+    def flip_card(self, card_graphics, player):
+
+        x = card_graphics.pos().x()
+        y = card_graphics.pos().y()
+
+        card = card_graphics.card
+        old_z = card_graphics.zValue()
+
+        faceDown = False
+        ang = 0
+
+        self.removeCard(card_graphics)
+        self.scene.removeItem(card_graphics)
+
+        new_card_graphics = self.addCard(card, player, faceDown)
+        new_card_graphics.setPos(x, y)
+        new_card_graphics.setZValue(old_z)
+        new_card_graphics.rotate(ang)
+        self.scene.addItem(new_card_graphics)
+
+        return new_card_graphics
 
 
     def dealDeck(self):
@@ -676,7 +758,7 @@ class cardTableWidget(QWidget):
 
         for card in self.deck:
 
-            self.addCard(card, player, self.scale, faceDown)
+            card_graphics = self.addCard(card, player, faceDown)
             self.getCardsList()[0].setPos(x, y)
             self.getCardsList()[0].rotate(ang)
 
@@ -695,7 +777,7 @@ class cardTableWidget(QWidget):
 
             for card in discard_suit:
 
-                self.addCard(card, player, self.scale)
+                self.addCard(card, player)
                 self.getCardsList()[0].setPos(x, y)
                 self.getCardsList()[0].rotate(ang)
 
@@ -728,7 +810,7 @@ class cardTableWidget(QWidget):
 
                         print('card: ', card, 'player: ', player, ', x: ', card_x, 'y: ', card_y)
 
-                        self.addCard(card, player, self.scale)
+                        self.addCard(card, player)
                         self.getCardsList()[0].setPos(x, y + n_cards_laid * dy)
                         self.getCardsList()[0].rotate(ang)
 
