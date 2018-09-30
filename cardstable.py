@@ -6,58 +6,9 @@ from PyQt4.QtGui  import *
 from PyQt4 import QtSvg
 
 from time import sleep
+import numpy as np
 
 from transform_action import pack_action
-
-
-def get_initial_state():
-
-        p1_hand = [0, 18, 7, 22, 50, 35, 41, 47]
-        p2_hand = [3, 10, 49, 30, 5, 11, 29, 21]
-
-        deck = range(52)
-
-        for card in p1_hand:
-            deck.remove(card)
-
-        for card in p2_hand:
-            deck.remove(card)
-
-        discarded_clubs = [1]
-        discarded_diamonds = [16]
-        discarded_hearts = [28]
-        discarded_spades = [51]
-
-        deck.remove(1)
-        deck.remove(16)
-        deck.remove(28)
-        deck.remove(51)
-
-        discarded_cards = [discarded_clubs, discarded_diamonds, discarded_hearts, discarded_spades]
-
-        p1_played_clubs = [2, 4]
-        p1_played_diamonds = []
-        p1_played_hearts = [26, 31]
-        p1_played_spades = [40]
-
-        p1_played = [p1_played_clubs, p1_played_diamonds, p1_played_hearts, p1_played_spades]
-
-        p2_played_clubs = [6]
-        p2_played_diamonds = [13, 14, 15, 17]
-        p2_played_hearts = []
-        p2_played_spades = [42]
-
-        p2_played = [p2_played_clubs, p2_played_diamonds, p2_played_hearts, p2_played_spades]
-
-        all_played = [p1_played, p2_played]
-
-        for player in range(2):
-            for suit in range(4):
-                for card in self.all_played[player][suit]:
-
-                    deck.remove(card)
-
-        return (p1_hand, p2_hand, discarded_cards, all_played, deck)
 
 
 class QGraphicsViewExtend(QGraphicsView):
@@ -130,6 +81,7 @@ class cardTableWidget(QWidget):
         self.p2_board = gameboard.p2_board
 
         self.p1_hand = self.p1_board.hand[:]
+        self.p1_hand_graphics = []
         self.p2_hand = self.p2_board.hand[:]
 
         p1_played = [[], [], [], []]
@@ -149,6 +101,7 @@ class cardTableWidget(QWidget):
         self.p1_card_graphics_to_draw = None
 
         self.last_p1_card = None
+        self.last_p1_card_z = None
         self.p1_hand_animated = False
         
         super(QWidget, self).__init__(parent)       
@@ -260,10 +213,11 @@ class cardTableWidget(QWidget):
 
             self.p1_card_to_change = card
             self.p1_card_graphics_to_change = card_graphics
-            #TODO
             self.last_p1_card = card_graphics.pos()
+            self.last_p1_card_z = card_graphics.zValue()
 
             print('Card pos: ', self.last_p1_card)
+            print('Card z: ', self.last_p1_card_z)
 
         self.p1_play = -1
         self.p1_discard = -1
@@ -278,12 +232,16 @@ class cardTableWidget(QWidget):
             self.p1_discard = 1
             self.p1_play = 0
 
+            self.p1_hand.remove(self.p1_card_to_change)
+
         else:
 
             if (self.p1_board.valid_play(card)):
 
                 self.p1_discard = 0
                 self.p1_play = 1
+
+                self.p1_hand.remove(self.p1_card_to_change)
 
             else:
 
@@ -296,6 +254,7 @@ class cardTableWidget(QWidget):
                 self.p1_card_to_change = None
                 self.p1_card_graphics_to_change = None
                 self.last_p1_card = None
+                self.last_p1_card_z = None
 
 
     def animate_hand_card(self):
@@ -366,26 +325,37 @@ class cardTableWidget(QWidget):
 
         print('Missing position for draw card: ', self.last_p1_card)
 
-        if animate:
+#        if animate:
+#
+#            if (draw_int == 0):
+#                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1, self.last_p1_card_z)
+#
+#            else:
+#                self.p1_card_graphics_to_draw = self.unrotate_card(self.p1_card_graphics_to_draw, 1)
+#
+#            # animate move
+#            self.p1_card_graphics_to_draw.anim.setDuration(15)
+#
+#            #self.p1_card_graphics_to_draw.anim.setStartValue(card_graphics.pos())
+#            end_pos = self.find_new_card_pos(card, 1, 0, 1, self.last_p1_card)
+#            print('end position for card drawn: ', end_pos)
+#            self.p1_card_graphics_to_draw.anim.setEndValue(end_pos)
+#            self.p1_card_graphics_to_draw.anim.start() 
+#
+#        else:
+#
+#            if (draw_int == 0):
+#                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1, self.last_p1_card_z)
+#
+#            else:
+#                self.p1_card_graphics_to_draw = self.unrotate_card(self.p1_card_graphics_to_draw, 1)
+#
+#            self.p1_card_graphics_to_draw.setPos(self.last_p1_card)
 
-            if (draw_int == 0):
-                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1)
-
-            # animate move
-            self.p1_card_graphics_to_draw.anim.setDuration(15)
-
-            #self.p1_card_graphics_to_draw.anim.setStartValue(card_graphics.pos())
-            end_pos = self.find_new_card_pos(card, 1, 0, 1, self.last_p1_card)
-            print('end position for card drawn: ', end_pos)
-            self.p1_card_graphics_to_draw.anim.setEndValue(end_pos)
-            self.p1_card_graphics_to_draw.anim.start() 
-
+        if (draw_int == 0):
+            self.deck.remove(self.p1_card_to_draw)
         else:
-
-            if (draw_int == 0):
-                self.p1_card_graphics_to_draw = self.flip_card(self.p1_card_graphics_to_draw, 1)
-
-            self.p1_card_graphics_to_draw.setPos(self.last_p1_card)
+            self.all_discarded[draw_int-1].remove(self.p1_card_to_draw)
 
         self.p1_card_graphics_to_draw.clicked = False
 
@@ -401,8 +371,17 @@ class cardTableWidget(QWidget):
 
         # update lists
         print('card to change: ', self.p1_card_to_change)
-        self.p1_hand.remove(self.p1_card_to_change)
-        self.p1_hand.append(self.p1_card_to_draw)
+
+        print('Length of p1_hand_graphics :', len(self.p1_hand_graphics))
+
+        idx = 8
+
+        for card_int in range(8):
+            if (self.p1_hand[card_int] == self.p1_card_to_change):
+                idx = card_int
+
+        self.p1_hand[idx] = self.p1_card_to_draw
+        self.p1_hand_graphics[idx] = self.p1_card_graphics_to_draw
 
         to_change_suit = int(self.p1_card_to_change / 13)
 
@@ -411,6 +390,8 @@ class cardTableWidget(QWidget):
         else:
             self.all_discarded[to_change_suit].append(self.p1_card_to_change)
 
+        self.redealHand()
+
         self.p1_play = -1
         self.p1_discard = -1
         self.p1_card_to_change = None
@@ -418,6 +399,7 @@ class cardTableWidget(QWidget):
         self.p1_card_to_draw = None
         self.p1_card_graphics_to_draw = None
         self.last_p1_card = None
+        self.last_p1_card_z = None
         self.p1_hand_animated = False
 
         self.env.step(action, 1)
@@ -669,13 +651,35 @@ class cardTableWidget(QWidget):
         return itemsOut
 
 
+    def redealHand(self):
+
+        dx = self.defHandSpacing
+        dy = 0
+
+        x, y, ang = self.playersHandsPos[0]
+
+        graphics = self.p1_hand_graphics[:]
+
+        for card_graphic in graphics:
+            self.removeCard(card_graphic)
+
+        for offset in range(8):
+
+            card = self.p1_hand[offset]
+
+            faceDown = False
+
+            card_graphics = self.addCard(card, 1, faceDown)
+            self.getCardsList()[0].setPos(x+dx*offset, y + dy*offset)
+
+            print('Added card ', card)
+
+
     def dealHands(self):
 
         hands = [self.p1_hand, self.p2_hand]
 
         for player in range(1, 3):
-
-            offset = 0
 
             dx = self.defHandSpacing
             dy = 0
@@ -694,10 +698,14 @@ class cardTableWidget(QWidget):
                 card_graphics = self.addCard(card, player, faceDown)
                 self.getCardsList()[0].setPos(x+dx*offset, y + dy*offset)
 
+                if (player == 1):
+                    self.p1_hand_graphics.append(card_graphics)
 
-    def rotate_card(self, card_graphics, player):
+        print('p1 hand graphics: ', self.p1_hand_graphics)
 
-        ready = False
+
+    def unrotate_card(self, card_graphics, player):
+        '''Called for drawing a discarded hand.'''
 
         x = card_graphics.pos().x()
         y = card_graphics.pos().y()
@@ -706,24 +714,52 @@ class cardTableWidget(QWidget):
         print('Initial y: ', y)
 
         card = card_graphics.card
-        old_z = card_graphics.zValue()
 
         faceDown = False
-        ang = 90
+        ang = 0
+
+        z = self.last_p1_card_z
 
         self.removeCard(card_graphics)
-        self.scene.removeItem(card_graphics)
 
         new_card_graphics = self.addCard(card, player, faceDown)
         new_card_graphics.setPos(x, y)
-        new_card_graphics.setZValue(old_z)
         new_card_graphics.rotate(ang)
-        self.scene.addItem(new_card_graphics)
+        new_card_graphics.setZValue(z)
 
         return new_card_graphics
 
 
-    def flip_card(self, card_graphics, player):
+    def rotate_card(self, card_graphics, player):
+        '''Called for discarding a card in the hand.'''
+
+        x = card_graphics.pos().x()
+        y = card_graphics.pos().y()
+
+        print('Initial x: ', x)
+        print('Initial y: ', y)
+
+        card = card_graphics.card
+
+        faceDown = False
+        ang = 90
+
+        suit = int(card / 13)    
+        n_discarded = len(self.all_discarded[suit])
+
+        z = n_discarded + 1
+
+        self.removeCard(card_graphics)
+
+        new_card_graphics = self.addCard(card, player, faceDown)
+        new_card_graphics.setPos(x, y)
+        new_card_graphics.rotate(ang)
+        new_card_graphics.setZValue(z)
+
+        return new_card_graphics
+
+
+    def flip_card(self, card_graphics, player, old_z=None):
 
         x = card_graphics.pos().x()
         y = card_graphics.pos().y()
@@ -734,14 +770,17 @@ class cardTableWidget(QWidget):
         faceDown = False
         ang = 0
 
+        if (not old_z):
+            old_z = card_graphics.zValue()
+
         self.removeCard(card_graphics)
-        self.scene.removeItem(card_graphics)
+        #self.scene.removeItem(card_graphics)
 
         new_card_graphics = self.addCard(card, player, faceDown)
         new_card_graphics.setPos(x, y)
         new_card_graphics.setZValue(old_z)
         new_card_graphics.rotate(ang)
-        self.scene.addItem(new_card_graphics)
+        #self.scene.addItem(new_card_graphics)
 
         return new_card_graphics
 
