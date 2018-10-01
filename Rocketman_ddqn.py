@@ -1,6 +1,8 @@
 import random
 import numpy as np
 
+import time
+
 from RocketmanEnv import RocketmanEnv
 from SumTree import SumTree
 
@@ -13,12 +15,22 @@ from keras.optimizers import *
 
 from keras import backend as K
 import tensorflow as tf
+from tensorflow.keras.callbacks import TensorBoard
 
 config=K.tf.ConfigProto(intra_op_parallelism_threads=6, inter_op_parallelism_threads=1)
 session = K.tf.Session(config=config)
 K.set_session(session)
 
+ACTIVATION1 = 'relu'
+ACTIVATION2 = 'relu'
 
+LEARNING_RATE = 0.00025
+BATCH_SIZE = 256
+
+GAMMA = 0.99
+LAMBDA = 0.0001      # speed of decay
+
+MODEL_NAME = '1x512net-act1-%s-act2-%s-BS-%d-LR-%f-GAMMA-%f-LAMBDA-%f--%d' % (ACTIVATION1, ACTIVATION2, BATCH_SIZE, LEARNING_RATE, GAMMA, LAMBDA, int(time.time()))
 
 
 def huber_loss(y_true, y_pred):
@@ -45,6 +57,8 @@ class Brain:
         self.model = self._createModel()
         self.model_ = self._createModel()
 
+        self.tensorboard = TensorBoard(log_dir=('logs/%s' % MODEL_NAME))
+
         # print self.model.summary()
 
         # self.model.load_weights('Rocketman-network.h5')
@@ -59,8 +73,6 @@ class Brain:
         model.add(Dense(512))
         model.add(Dense(units=self.actionCnt, activation='linear'))
 
-        LEARNING_RATE = 0.00025
-
         opt = RMSprop(lr=LEARNING_RATE)
         model.compile(loss=huber_loss, optimizer=opt)
 
@@ -69,7 +81,7 @@ class Brain:
 
     def train(self, x, y, epoch=1, verbose=0):
 
-        self.model.fit(x, y, batch_size=256, epochs=epoch, verbose=verbose)
+        self.model.fit(x, y, batch_size=256, epochs=epoch, verbose=verbose, callbacks=[self.tensorboard])
 
 
     def predict(self, s, target=False):
@@ -150,13 +162,9 @@ class Memory:   # stored as ( s, a, r, s_ )
 
 #----------
 MEMORY_CAPACITY = 300000
-BATCH_SIZE = 256
-
-GAMMA = 0.99
 
 MAX_EPSILON = 1
 MIN_EPSILON = 0.01
-LAMBDA = 0.0001      # speed of decay
 
 UPDATE_TARGET_FREQUENCY = 2000
 #----------
@@ -367,7 +375,7 @@ class Environment:
             cum_score = self.env.gameboard.report_score(1) + self.env.gameboard.report_score(2)
             agent.scores_log[agent.episode] = cum_score
 
-            if ((agent.episode % 250) == 0):
+            if ((agent.episode % 50) == 0):
                 print('Episode: ', agent.episode)
 
             agent.episode += 1
@@ -458,7 +466,7 @@ if __name__ == "__main__":
         print('Beginning learning')
         while True:
             env.run(agent, logRewards=True)
-
+    
     finally:
 
         agent.brain.model.save("Rocketman-network.h5")
