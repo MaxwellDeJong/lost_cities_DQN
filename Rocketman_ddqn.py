@@ -484,9 +484,9 @@ if __name__ == "__main__":
     
     finally:
 
-        agent.brain.model.save('Rocketman-network--' + MODEL_NAME + '.h5')
-        agent.brain.model_.save('Rocketman-t_network--' + MODEL_NAME + '.h5')
+        agent.brain.model.save('logs/Rocketman-network--' + MODEL_NAME + '.h5')
+        agent.brain.model_.save('logs/Rocketman-t_network--' + MODEL_NAME + '.h5')
 
-        np.save('Rocketman-rewards--' + MODEL_NAME, agent.rewards_log)
-        np.save('Rocketman-scores--' + MODEL_NAME, agent.scores_log)
-        np.save('Rocketman-loss--' + MODEL_NAME, agent.loss_log)
+        np.save('logs/Rocketman-rewards--' + MODEL_NAME, agent.rewards_log)
+        np.save('logs/Rocketman-scores--' + MODEL_NAME, agent.scores_log)
+        np.save('logs/Rocketman-loss--' + MODEL_NAME, agent.loss_log)
