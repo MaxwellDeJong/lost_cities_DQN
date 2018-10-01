@@ -15,7 +15,6 @@ from keras.optimizers import *
 
 from keras import backend as K
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
 
 config=K.tf.ConfigProto(intra_op_parallelism_threads=6, inter_op_parallelism_threads=1)
 session = K.tf.Session(config=config)
@@ -57,8 +56,6 @@ class Brain:
         self.model = self._createModel()
         self.model_ = self._createModel()
 
-        self.tensorboard = TensorBoard(log_dir=('logs/%s' % MODEL_NAME))
-
         # print self.model.summary()
 
         # self.model.load_weights('Rocketman-network.h5')
@@ -69,9 +66,9 @@ class Brain:
 
         model = Sequential()
 
-        model.add(Dense(units=256, activation='relu', input_dim=self.stateCnt))
+        model.add(Dense(units=256, activation=ACTIVATION1, input_dim=self.stateCnt))
         model.add(Dense(512))
-        model.add(Dense(units=self.actionCnt, activation='linear'))
+        model.add(Dense(units=self.actionCnt, activation=ACTIVATION2))
 
         opt = RMSprop(lr=LEARNING_RATE)
         model.compile(loss=huber_loss, optimizer=opt)
@@ -81,7 +78,12 @@ class Brain:
 
     def train(self, x, y, epoch=1, verbose=0):
 
-        self.model.fit(x, y, batch_size=256, epochs=epoch, verbose=verbose, callbacks=[self.tensorboard])
+        self.model.fit(x, y, batch_size=BATCH_SIZE, epochs=epoch, verbose=verbose)
+
+
+    def evaluate(self, x, y):
+
+        return self.model.evaluate(x, y, batch_size=BATCH_SIZE, verbose=0)
 
 
     def predict(self, s, target=False):
@@ -182,8 +184,9 @@ class Agent:
         self.steps = 0
         self.epsilon = MAX_EPSILON
 
-        self.rewards_log = np.zeros(25000, dtype=np.int16)
-        self.scores_log = np.zeros(25000, dtype=np.int16)
+        self.rewards_log = np.zeros(50000, dtype=np.int16)
+        self.scores_log = np.zeros(50000, dtype=np.int16)
+        self.loss_log = np.zeros(50000, dtype=np.float32)
 
         self.episode = 0
 
@@ -245,6 +248,8 @@ class Agent:
             self.memory.update(idx, errors[i])
 
         self.brain.train(x, y)
+
+        return self.brain.evaluate(x, y)
 
 
     def getTargets(self, batch):
@@ -360,17 +365,24 @@ class Environment:
         self.env.reset()
         done = False
 
+        n_steps = 0
+
+        cum_loss = 0
         R = 0 
 
         while not done:            
 
-            (r, done) = self.run_agent(agent)
+            (r, done, loss) = self.run_agent(agent)
 
             R += r
+
+            cum_loss += loss
+            n_steps += 1
 
         if logRewards:
 
             agent.rewards_log[agent.episode] = R
+            agent.loss_log[agent.episode] = cum_loss / n_steps
 
             cum_score = self.env.gameboard.report_score(1) + self.env.gameboard.report_score(2)
             agent.scores_log[agent.episode] = cum_score
@@ -385,6 +397,7 @@ class Environment:
 
         rewards = [0, 0]
         done_list = [False, False]
+        losses = [0, 0]
 
         for i in range(2):
 
@@ -415,15 +428,17 @@ class Environment:
                 s_ = state.copy()
 
             agent.observe((s, a, r, s_))
-            agent.replay()            
+            loss = agent.replay()            
 
             rewards[i] = r
             done_list[i] = done
+            losses[i] = loss
 
         R = rewards[0] + rewards[1]
         Done = done_list[0] or done_list[1]
+        loss = (losses[0] + losses[1]) / 2.
 
-        return (R, Done)
+        return (R, Done, loss)
 
 
 #-------------------- MAIN ----------------------------
@@ -469,8 +484,9 @@ if __name__ == "__main__":
     
     finally:
 
-        agent.brain.model.save("Rocketman-network.h5")
-        agent.brain.model_.save("Rocketman-t_network.h5")
+        agent.brain.model.save('Rocketman-network--' + MODEL_NAME + '.h5')
+        agent.brain.model_.save('Rocketman-t_network--' + MODEL_NAME + '.h5')
 
-        np.save('Rocketman-rewards', agent.rewards_log)
-        np.save('Rocketman-scores', agent.scores_log)
+        np.save('Rocketman-rewards--' + MODEL_NAME, agent.rewards_log)
+        np.save('Rocketman-scores--' + MODEL_NAME, agent.scores_log)
+        np.save('Rocketman-loss--' + MODEL_NAME, agent.loss_log)
